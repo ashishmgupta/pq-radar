@@ -1,0 +1,9 @@
+{
+  "subnets": [
+    {"cidr": "104.154.89.105/32", "sni_hint": "badssl.com"}
+  ],
+  "port": 443,
+  "liveness_timeout_ms": 1500,
+  "handshake_timeout_ms": 4000,
+  "concurrency": 10
+}

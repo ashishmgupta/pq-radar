@@ -1,0 +1,1 @@
+ALTER TABLE zones ADD COLUMN account_label TEXT NOT NULL DEFAULT 'dev';
