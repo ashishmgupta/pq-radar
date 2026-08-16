@@ -8,6 +8,7 @@ node_modules/
 .dev.vars
 .env
 creds.txt
+wrangler.local.jsonc
 
 # Python container bytecode cache
 **/__pycache__/
