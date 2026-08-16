@@ -13,6 +13,14 @@ export interface Env {
   CF_ACCOUNT_ID: string;
   CF_API_TOKEN_QA: string;
   CF_ACCOUNT_ID_QA: string;
+  // GitHub repo clone/view traffic tracking (see github-traffic.ts) — GitHub's
+  // own traffic API only retains 14 days, so this app polls it daily and
+  // keeps the permanent history itself.
+  GITHUB_TOKEN: string;
+  GITHUB_REPO: string;
+  RESEND_API_KEY: string;
+  NOTIFY_EMAIL: string;
+  NOTIFY_FROM_EMAIL: string;
 }
 
 export interface CfAccountConfig {
