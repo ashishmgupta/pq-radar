@@ -297,6 +297,46 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
   var labelParam = qparam("label") || cidrParam;
   var currentEnvFilter = qparam("env") || "all";
 
+  // ?redact=1 swaps real hostnames/IPs/zone names for consistent fake ones,
+  // purely client-side, for taking clean screenshots. The same real value
+  // always maps to the same fake value (via fakeMap), so a hostname shown in
+  // the table and the same hostname shown inside its expanded openssl
+  // request/response text stay consistent with each other.
+  var redactMode = qparam("redact") === "1";
+  var fakeMap = {};
+  var fakeCounter = 0;
+  function looksLikeIp(s) {
+    return /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(s || "");
+  }
+  function fakeFor(real, kind) {
+    if (!real) return real;
+    if (Object.prototype.hasOwnProperty.call(fakeMap, real)) return fakeMap[real];
+    fakeCounter++;
+    var fake;
+    if (kind === "ip") fake = "192.0.2." + ((fakeCounter % 254) + 1);
+    else if (kind === "zone") fake = "zone" + fakeCounter + ".example.com";
+    else fake = "host" + fakeCounter + ".example.com";
+    fakeMap[real] = fake;
+    return fake;
+  }
+  function maskValue(real, kind) {
+    return redactMode ? fakeFor(real, kind) : real;
+  }
+  // For free-text blobs (openssl command/response output) rather than a single
+  // known field: replaces any already-masked real value first (so it matches
+  // the table), then a blanket sweep for any literal IPv4 address, so cert
+  // fields or anything else embedding one still gets caught even without an
+  // exact field match.
+  function maskBlob(text) {
+    if (!redactMode || !text) return text;
+    var masked = text;
+    Object.keys(fakeMap).forEach(function (real) {
+      masked = masked.split(real).join(fakeMap[real]);
+    });
+    masked = masked.replace(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g, function (m) { return fakeFor(m, "ip"); });
+    return masked;
+  }
+
   var lastHosts = [];
   var lastFiltered = [];
 
@@ -311,12 +351,15 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
     var el = document.getElementById("rows");
     el.innerHTML = filtered.map(function (h, i) {
       var o = overall(h);
+      var hostname = maskValue(h.hostname, "host");
+      var zoneName = maskValue(h.zone_name, "zone");
+      var originIp = maskValue(h.origin_ip, looksLikeIp(h.origin_ip) ? "ip" : "host");
       return '<tr class="host-row" data-idx="' + i + '">' +
-        '<td>' + escapeHtml(h.hostname) + '</td>' +
-        '<td class="muted">' + escapeHtml(h.zone_name) + '</td>' +
+        '<td>' + escapeHtml(hostname) + '</td>' +
+        '<td class="muted">' + escapeHtml(zoneName) + '</td>' +
         '<td class="muted">' + escapeHtml((h.account_label || "").toUpperCase()) + '</td>' +
         '<td>' + outcomeBadge(h.edge_outcome) + '</td>' +
-        '<td>' + escapeHtml(h.origin_ip) + '</td>' +
+        '<td>' + escapeHtml(originIp) + '</td>' +
         '<td>' + outcomeBadge(h.origin_outcome) + '</td>' +
         '<td><span class="badge ' + o.cls + '">' + o.icon + ' ' + escapeHtml(o.label) + '</span></td>' +
         '</tr>';
@@ -343,12 +386,14 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
       panelEl.innerHTML = '<h4>' + escapeHtml(title) + '</h4><p class="muted">No probe recorded for this leg yet.</p>';
       return;
     }
+    var command = maskBlob(r.command);
+    var raw = maskBlob(r.raw);
     panelEl.innerHTML = '<h4>' + escapeHtml(title) + '</h4>' +
       '<p class="kv"><b>Outcome:</b> ' + outcomeBadge(r.outcome) + '</p>' +
       (r.protocol ? '<p class="kv"><b>Protocol:</b> ' + escapeHtml(r.protocol) + '</p>' : '') +
       (r.negotiated_group ? '<p class="kv"><b>Group:</b> ' + escapeHtml(r.negotiated_group) + '</p>' : '') +
-      '<p class="kv"><b>Request</b></p><pre>' + (r.command ? escapeHtml(r.command) : '(none)') + '</pre>' +
-      '<p class="kv"><b>Response</b></p><pre>' + (r.raw ? escapeHtml(r.raw) : '(empty)') + '</pre>';
+      '<p class="kv"><b>Request</b></p><pre>' + (command ? escapeHtml(command) : '(none)') + '</pre>' +
+      '<p class="kv"><b>Response</b></p><pre>' + (raw ? escapeHtml(raw) : '(empty)') + '</pre>';
   }
 
   function toggleDetailRow(tr, h) {
@@ -521,6 +566,12 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
   function showApp() {
     gate.style.display = "none";
     app.style.display = "block";
+    if (redactMode) {
+      var banner = document.createElement("div");
+      banner.textContent = "\\uD83D\\uDD12 Redacted view \\u2014 hostnames/IPs are fake, for screenshots only";
+      banner.style.cssText = "background:#3a2a00;color:#fab219;border:1px solid #fab219;border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:16px;";
+      app.insertBefore(banner, app.firstChild);
+    }
     setTitle();
     load();
   }

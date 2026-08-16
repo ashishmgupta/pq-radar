@@ -13,6 +13,16 @@ See `docs/architecture.html` for the full picture.
 This repo ships with no real account IDs, zones, subnets, or secrets — you
 configure your own following the steps below.
 
+## Screenshots
+
+<img src="docs/screenshots/pq-summary.svg" width="700" alt="Example summary: 128 total endpoints, 84 PQ-ready, 66% ready">
+
+*(Illustrative numbers — a fresh install starts at 0 until you scan.)*
+
+**Proof, not just a badge** — the actual `openssl s_client` exchange behind every verdict, hostnames/IPs redacted (`?redact=1`). Here, the origin leg fell back to a classical group while the edge still negotiated PQ — exactly the gap this tool exists to catch.
+
+<img src="docs/screenshots/detail-downgrade.png" width="700" alt="Row detail showing a PQ-vs-classical mismatch between edge and origin">
+
 ## Prerequisites
 
 - Node.js and npm
@@ -97,3 +107,7 @@ probe container directly (not wired into any script — nothing in the app
 references them by name). They use public test targets
 (`cloudflare.com`, `badssl.com`, the reserved `192.0.2.1` documentation
 range) so they're safe to run as-is.
+
+## License
+
+Apache License 2.0 — see [LICENSE](LICENSE).
