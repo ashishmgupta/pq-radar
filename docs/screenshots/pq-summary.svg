@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 220" font-family="ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace">
+  <defs>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#17130f"/>
+      <stop offset="1" stop-color="#0a0a0a"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="760" height="220" rx="12" fill="url(#panel)" stroke="#2a2a2a" stroke-width="1"/>
+
+  <text x="32" y="38" font-size="11" letter-spacing="2" fill="#35c235" font-weight="700">PQ READINESS — EXAMPLE</text>
+
+  <!-- divider lines between the three stat columns -->
+  <line x1="277" y1="56" x2="277" y2="184" stroke="#2a2a2a" stroke-width="1"/>
+  <line x1="518" y1="56" x2="518" y2="184" stroke="#2a2a2a" stroke-width="1"/>
+
+  <!-- Total Endpoints -->
+  <text x="32" y="90" font-size="13" fill="#8c8471">Total Endpoints</text>
+  <text x="32" y="150" font-size="52" font-weight="700" fill="#f5f2ea">128</text>
+  <text x="32" y="176" font-size="12" fill="#8c8471">Dev + QA, all legs</text>
+
+  <!-- PQ-Ready -->
+  <text x="309" y="90" font-size="13" fill="#8c8471">PQ-Ready</text>
+  <text x="309" y="150" font-size="52" font-weight="700" fill="#35c235">84</text>
+  <text x="309" y="176" font-size="12" fill="#8c8471">X25519MLKEM768 negotiated</text>
+
+  <!-- % Ready -->
+  <text x="550" y="90" font-size="13" fill="#8c8471">% Ready</text>
+  <text x="550" y="150" font-size="52" font-weight="700" fill="#35c235">66%</text>
+  <rect x="550" y="164" width="178" height="8" rx="4" fill="#2a2a2a"/>
+  <rect x="550" y="164" width="117" height="8" rx="4" fill="#35c235"/>
+</svg>
