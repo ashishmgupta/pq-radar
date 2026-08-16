@@ -239,6 +239,26 @@ export const READINESS_PAGE_HTML = `<!doctype html>
     });
   }
 
+  // ?redact=1 swaps real subnet CIDRs/labels for consistent fake ones, purely
+  // client-side, for taking clean screenshots \\u2014 never touches the underlying
+  // data or links (navigation still targets the real cidr), only what's drawn
+  // on screen. Same real value always maps to the same fake value within a
+  // page load, via fakeMap.
+  var redactMode = /[?&]redact=1\\b/.test(window.location.search);
+  var fakeMap = {};
+  var fakeCounter = 0;
+  function fakeFor(real, kind) {
+    if (!real) return real;
+    if (Object.prototype.hasOwnProperty.call(fakeMap, real)) return fakeMap[real];
+    fakeCounter++;
+    var fake = kind === "cidr" ? "10.0." + fakeCounter + ".0/24" : "NETWORK-" + fakeCounter;
+    fakeMap[real] = fake;
+    return fake;
+  }
+  function maskValue(real, kind) {
+    return redactMode ? fakeFor(real, kind) : real;
+  }
+
   // Builds a link into the standalone detail/services pages, carrying the chosen
   // filter as query params instead of client-side view-swapping \\u2014 each drill-down
   // is its own page now, so the filter has to survive the navigation somehow.
@@ -318,7 +338,8 @@ export const READINESS_PAGE_HTML = `<!doctype html>
     }
     el.innerHTML = subnets.map(function (s) {
       var label = s.cidr + (s.label ? " \\u2014 " + s.label : "");
-      return statTileHtml(label, s.total, s.live, s.dead,
+      var displayLabel = redactMode ? maskValue(s.cidr, "cidr") : label;
+      return statTileHtml(displayLabel, s.total, s.live, s.dead,
         buildUrl("/readiness/detail", { view: "subnet-origin", cidr: s.cidr, label: label }));
     }).join("");
   }
