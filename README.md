@@ -76,33 +76,6 @@ configure your own following the steps below.
      throughout the app — you can point both at the same account if you only
      have one environment).
 
-5b. **(Optional) GitHub clone/view tracking** — daily-polled inventory of
-   your repo's traffic (clones, views, top referrers, top paths — see
-   `src/github-traffic.ts`), emailed to you whenever the clone count rises.
-   GitHub's own traffic API only retains 14 days and has no per-clone
-   identity to expose (cloning a public repo is anonymous) — this just keeps
-   the numbers permanently and tells you when they move. Skip this section
-   entirely if you don't want it; the poll silently no-ops without these set.
-   ```
-   npx wrangler secret put GITHUB_TOKEN -c wrangler.local.jsonc
-   npx wrangler secret put RESEND_API_KEY -c wrangler.local.jsonc
-   ```
-   - `GITHUB_TOKEN` — a **fine-grained** Personal Access Token
-     (github.com → Settings → Developer settings → Personal access tokens →
-     Fine-grained tokens), scoped to just this one repository, with
-     read access to "Administration" (this is what the traffic API requires —
-     equivalent to push access, GitHub doesn't offer a narrower scope for it).
-     Don't reuse a broad personal token here.
-   - `RESEND_API_KEY` — sign up at resend.com (free tier is plenty for this),
-     create an API key. The default `NOTIFY_FROM_EMAIL` in `wrangler.jsonc`
-     (`onboarding@resend.dev`) is Resend's shared sandbox sender and works
-     without verifying your own domain; swap it for your own address once
-     you've verified a domain with Resend, if you want.
-   - Also set `GITHUB_REPO` (`owner/repo`) and `NOTIFY_EMAIL` in the `vars`
-     section of your `wrangler.jsonc` (or local override — see step 6).
-   - Runs once a day (piggybacks on the existing hourly cron, gated to a
-     single UTC hour — see `GITHUB_TRAFFIC_POLL_HOUR_UTC` in `src/cron.ts`).
-
 6. **Set the target account IDs** in `wrangler.jsonc`'s `vars` — replace
    `REPLACE_WITH_YOUR_DEV_CLOUDFLARE_ACCOUNT_ID` and the QA equivalent with
    the real account IDs (found on the right sidebar of any zone's Overview
