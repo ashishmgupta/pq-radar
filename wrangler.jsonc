@@ -1,0 +1,47 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pq-radar",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-02",
+  // No top-level account_id: wrangler uses whichever account you're logged
+  // into (or prompts you to pick one, if you have several). See README.md.
+  "vars": {
+    "CF_ACCOUNT_ID": "REPLACE_WITH_YOUR_DEV_CLOUDFLARE_ACCOUNT_ID",
+    "CF_ACCOUNT_ID_QA": "REPLACE_WITH_YOUR_QA_CLOUDFLARE_ACCOUNT_ID"
+  },
+  // NOTE: CF_ACCOUNT_ID / CF_ACCOUNT_ID_QA (in vars) are the *target* accounts
+  // whose zones/DNS records this app reads via the Cloudflare API — not the
+  // account this Worker itself deploys into. CF_ACCOUNT_ID is treated as "dev".
+  // See README.md for how to find these.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pq-radar",
+      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+    }
+  ],
+  "containers": [
+    {
+      "class_name": "ProbeContainer",
+      "image": "./container/Dockerfile",
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "PROBE_CONTAINER",
+        "class_name": "ProbeContainer"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["ProbeContainer"]
+    }
+  ],
+  "triggers": {
+    "crons": ["0 * * * *"]
+  }
+}

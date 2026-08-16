@@ -1,0 +1,9 @@
+{
+  "subnets": [
+    {"cidr": "104.16.132.229/32", "sni_hint": "cloudflare.com"}
+  ],
+  "port": 443,
+  "liveness_timeout_ms": 1500,
+  "handshake_timeout_ms": 4000,
+  "concurrency": 10
+}
