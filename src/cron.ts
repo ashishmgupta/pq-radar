@@ -9,12 +9,6 @@ import {
   writeScanResults,
   newAccumulator,
 } from "./scan";
-import { pollGithubTraffic } from "./github-traffic";
-
-// GitHub's traffic data is daily-granular anyway, so there's nothing gained
-// from polling every hour \\u2014 piggybacks on the existing hourly heartbeat,
-// gated to fire once during this specific UTC hour.
-const GITHUB_TRAFFIC_POLL_HOUR_UTC = 6;
 
 /** Runs (and records) one subnet's scheduled scan. Sets/clears cron_run_started_at
  *  around the work so the dashboard/schedule page can show a live "running now" badge —
@@ -75,11 +69,5 @@ export async function handleScheduled(controller: ScheduledController, env: Env,
 
   for (const subnet of dueSubnets.results) {
     ctx.waitUntil(runSubnetScan(env, subnet, scanConfig));
-  }
-
-  if (currentHourUtc === GITHUB_TRAFFIC_POLL_HOUR_UTC) {
-    ctx.waitUntil(
-      pollGithubTraffic(env).catch((err) => console.error("cron: github traffic poll failed:", err))
-    );
   }
 }
