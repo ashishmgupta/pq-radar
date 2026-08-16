@@ -7,12 +7,19 @@
   // into (or prompts you to pick one, if you have several). See README.md.
   "vars": {
     "CF_ACCOUNT_ID": "REPLACE_WITH_YOUR_DEV_CLOUDFLARE_ACCOUNT_ID",
-    "CF_ACCOUNT_ID_QA": "REPLACE_WITH_YOUR_QA_CLOUDFLARE_ACCOUNT_ID"
+    "CF_ACCOUNT_ID_QA": "REPLACE_WITH_YOUR_QA_CLOUDFLARE_ACCOUNT_ID",
+    "GITHUB_REPO": "REPLACE_WITH_YOUR_GITHUB_OWNER/REPO",
+    "NOTIFY_EMAIL": "REPLACE_WITH_YOUR_EMAIL",
+    "NOTIFY_FROM_EMAIL": "onboarding@resend.dev"
   },
   // NOTE: CF_ACCOUNT_ID / CF_ACCOUNT_ID_QA (in vars) are the *target* accounts
   // whose zones/DNS records this app reads via the Cloudflare API — not the
   // account this Worker itself deploys into. CF_ACCOUNT_ID is treated as "dev".
   // See README.md for how to find these.
+  //
+  // GITHUB_REPO / NOTIFY_EMAIL / NOTIFY_FROM_EMAIL are for the optional daily
+  // GitHub clone/view traffic poll (github-traffic.ts) — also needs the
+  // GITHUB_TOKEN and RESEND_API_KEY secrets (wrangler secret put), see README.
   "d1_databases": [
     {
       "binding": "DB",
