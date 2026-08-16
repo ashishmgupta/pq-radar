@@ -1,0 +1,9 @@
+{
+  "subnets": [
+    {"hostname": "cloudflare.com"}
+  ],
+  "port": 443,
+  "liveness_timeout_ms": 1500,
+  "handshake_timeout_ms": 4000,
+  "concurrency": 10
+}
