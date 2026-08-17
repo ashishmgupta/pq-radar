@@ -65,7 +65,7 @@ def build_targets(args):
         subnets.append(subnet)
         if leg == "edge":
             hostnames.add(entry)
-    return subnets, hostnames, entries
+    return subnets, hostnames
 
 
 def report_progress(event):
@@ -89,7 +89,7 @@ def main():
     )
     args = parser.parse_args()
 
-    subnets, hostnames, entries = build_targets(args)
+    subnets, hostnames = build_targets(args)
 
     findings = asyncio.run(run_scan_streaming(
         subnets, PORT, LIVENESS_TIMEOUT_MS, HANDSHAKE_TIMEOUT_MS, CONCURRENCY, report_progress,
@@ -102,7 +102,7 @@ def main():
         finding["leg"] = "edge" if finding["ip"] in hostnames else "origin"
 
     if args.out and args.out.lower().endswith(".html"):
-        output = render_html_report(entries, findings, hostnames)
+        output = render_html_report(findings, hostnames)
     else:
         output = json.dumps({"total": len(findings), "findings": findings}, indent=2)
 
