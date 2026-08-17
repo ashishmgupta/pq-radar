@@ -113,13 +113,18 @@ range) so they're safe to run as-is.
 Prefer not to deploy the Worker at all? `container/scan.py` runs the exact
 same TLS handshake classifier as the hosted tool, in a small Docker image,
 against your own domains or CIDR ranges — no account, no cloud dependency,
-just OpenSSL 3.5 in a container.
+just OpenSSL 3.5 in a container. Pull the published image directly:
 
+```
+docker run --rm ashishmgupta/pqradar example.com
+docker run --rm ashishmgupta/pqradar example.com api.example.com 10.0.0.0/24
+docker run --rm -v "$(pwd):/data" ashishmgupta/pqradar --file /data/targets.txt --out /data/report.json
+```
+
+Or build it yourself from source instead of pulling:
 ```
 docker build -f container/Dockerfile.cli -t pqradar container/
 docker run --rm pqradar example.com
-docker run --rm pqradar example.com api.example.com 10.0.0.0/24
-docker run --rm -v "$(pwd):/data" pqradar --file /data/targets.txt --out /data/report.json
 ```
 
 Targets are positional and auto-classified — a hostname or a CIDR/IP, mixed
