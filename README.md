@@ -129,11 +129,17 @@ docker run --rm pqradar example.com
 
 Targets are positional and auto-classified — a hostname or a CIDR/IP, mixed
 freely in one run. `--file` reads one target per line (`#` comments and
-blank lines ignored); `--out` writes JSON instead of printing to stdout.
-Every result is labeled by leg: a hostname target resolves through DNS like
-a browser would, so a CDN-fronted host is scanned at its **edge**, not its
-origin; a bare IP or CIDR entry connects directly, so that leg is the
-**origin** itself.
+blank lines ignored). Every result is labeled by leg: a hostname target
+resolves through DNS like a browser would, so a CDN-fronted host is scanned
+at its **edge**, not its origin; a bare IP or CIDR entry connects directly,
+so that leg is the **origin** itself.
+
+`--out` writes a report instead of printing JSON to stdout — `.html` for a
+dark-mode report (compliance %, PQ/not-PQ breakdown, and the OpenSSL
+command + raw response per target), anything else for JSON:
+```
+docker run --rm -v "$(pwd):/data" ashishmgupta/pqradar example.com --out /data/report.html
+```
 
 v1 is TLS/HTTPS on port 443 only — SSH and FTPS aren't wired into the CLI
 yet (the hosted Worker path covers those).

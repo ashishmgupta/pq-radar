@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY probe.py scan.py ./
+COPY probe.py scan.py report.py ./
 
 # So `docker run image target1 target2 ...` passes args straight to the scanner
 ENTRYPOINT ["python3", "scan.py"]
