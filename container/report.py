@@ -55,11 +55,22 @@ def _card(finding, leg):
     if finding.get("raw"):
         raw_html = f'<h4>Raw response</h4><pre class="code-box raw-box">{_esc(finding["raw"])}</pre>'
 
+    # data-status carries every tile filter this card matches (space-separated,
+    # checked as a token list — "live pq" matches both the Live and PQ tiles).
+    # "all" is implicit — the Scanned tile clears the filter rather than
+    # needing every card tagged with it.
+    if outcome == "unreachable":
+        status = "dead"
+    elif outcome == "pq":
+        status = "live pq"
+    else:
+        status = "live non-pq"
+
     # data-target carries a lowercased copy for the search filter — cheaper
     # than re-lowercasing target text on every keystroke across thousands
     # of entries.
     return (
-        f'<details class="card" data-target="{_esc(target.lower())}">'
+        f'<details class="card" data-target="{_esc(target.lower())}" data-status="{status}">'
         '<summary class="card-head">'
         '<span class="card-title">'
         '<span class="caret" aria-hidden="true">&#9656;</span>'
@@ -131,6 +142,10 @@ def render_html_report(findings, hostnames):
   .summary {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 24px; }}
   .stat-tile {{ background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }}
   .stat-tile.highlight {{ border-color: var(--status-good); }}
+  .stat-tile.clickable {{ cursor: pointer; transition: border-color .12s ease, background .12s ease; }}
+  .stat-tile.clickable:hover {{ border-color: var(--text-secondary); }}
+  .stat-tile.clickable:focus-visible {{ outline: 2px solid var(--text-secondary); outline-offset: 2px; }}
+  .stat-tile.clickable.active {{ border-color: var(--text-primary); background: var(--surface-2); }}
   .stat-tile-label {{ font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;
     text-transform: uppercase; letter-spacing: 0.04em; }}
   .stat-tile-total {{ font-size: 30px; font-weight: 700; color: var(--text-primary); line-height: 1; letter-spacing: -0.02em; }}
@@ -184,12 +199,17 @@ def render_html_report(findings, hostnames):
   <h1>Scan Report</h1>
   <p class="subtitle">Requested {total} {target_word} &middot; {timestamp}</p>
 
-  <div class="summary">
-    <div class="stat-tile"><div class="stat-tile-label">Scanned</div><div class="stat-tile-total">{total}</div></div>
-    <div class="stat-tile"><div class="stat-tile-label">Live</div><div class="stat-tile-total">{live_count}</div></div>
-    <div class="stat-tile"><div class="stat-tile-label">Dead</div><div class="stat-tile-total">{unreachable_count}</div></div>
-    <div class="stat-tile"><div class="stat-tile-label">PQ</div><div class="stat-tile-total good">{pq_count}</div></div>
-    <div class="stat-tile"><div class="stat-tile-label">Non-PQ</div><div class="stat-tile-total critical">{non_pq_count}</div></div>
+  <div class="summary" id="summary-tiles">
+    <div class="stat-tile clickable active" data-filter="all" tabindex="0" role="button" aria-pressed="true">
+      <div class="stat-tile-label">Scanned</div><div class="stat-tile-total">{total}</div></div>
+    <div class="stat-tile clickable" data-filter="live" tabindex="0" role="button" aria-pressed="false">
+      <div class="stat-tile-label">Live</div><div class="stat-tile-total">{live_count}</div></div>
+    <div class="stat-tile clickable" data-filter="dead" tabindex="0" role="button" aria-pressed="false">
+      <div class="stat-tile-label">Dead</div><div class="stat-tile-total">{unreachable_count}</div></div>
+    <div class="stat-tile clickable" data-filter="pq" tabindex="0" role="button" aria-pressed="false">
+      <div class="stat-tile-label">PQ</div><div class="stat-tile-total good">{pq_count}</div></div>
+    <div class="stat-tile clickable" data-filter="non-pq" tabindex="0" role="button" aria-pressed="false">
+      <div class="stat-tile-label">Non-PQ</div><div class="stat-tile-total critical">{non_pq_count}</div></div>
     <div class="stat-tile highlight"><div class="stat-tile-label">PQ of Live</div><div class="stat-tile-total">{live_pct}%</div></div>
   </div>
 
@@ -209,17 +229,44 @@ def render_html_report(findings, hostnames):
   var input = document.getElementById("search");
   var counter = document.getElementById("search-count");
   var cards = Array.prototype.slice.call(document.querySelectorAll(".card"));
+  var tiles = Array.prototype.slice.call(document.querySelectorAll(".stat-tile.clickable"));
   var total = cards.length;
+  var activeFilter = "all";
 
-  input.addEventListener("input", function () {{
+  function applyFilters() {{
     var q = input.value.trim().toLowerCase();
     var shown = 0;
     cards.forEach(function (card) {{
-      var match = !q || card.getAttribute("data-target").indexOf(q) !== -1;
+      var textMatch = !q || card.getAttribute("data-target").indexOf(q) !== -1;
+      var status = " " + card.getAttribute("data-status") + " ";
+      var statusMatch = activeFilter === "all" || status.indexOf(" " + activeFilter + " ") !== -1;
+      var match = textMatch && statusMatch;
       card.style.display = match ? "" : "none";
       if (match) shown++;
     }});
     counter.textContent = shown + " of " + total + " shown";
+  }}
+
+  function setFilter(filter) {{
+    activeFilter = (activeFilter === filter) ? "all" : filter;
+    tiles.forEach(function (tile) {{
+      var isActive = tile.getAttribute("data-filter") === activeFilter;
+      tile.classList.toggle("active", isActive);
+      tile.setAttribute("aria-pressed", isActive ? "true" : "false");
+    }});
+    applyFilters();
+  }}
+
+  input.addEventListener("input", applyFilters);
+
+  tiles.forEach(function (tile) {{
+    tile.addEventListener("click", function () {{ setFilter(tile.getAttribute("data-filter")); }});
+    tile.addEventListener("keydown", function (e) {{
+      if (e.key === "Enter" || e.key === " ") {{
+        e.preventDefault();
+        setFilter(tile.getAttribute("data-filter"));
+      }}
+    }});
   }});
 }})();
 </script>
