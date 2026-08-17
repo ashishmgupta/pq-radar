@@ -1,8 +1,12 @@
 """Renders CLI scan results as a self-contained, dark-mode HTML report —
 same badge taxonomy, colors, and panel styling as the hosted Worker's
 readiness-detail page, so the CLI's output reads like a sibling of the
-product instead of a different tool. No JS, no external assets: one file,
-openable straight from disk."""
+product instead of a different tool. One file, openable straight from disk.
+
+Built to stay usable at list-scan scale (hundreds to thousands of targets):
+each result is a collapsed <details> element (native, no JS needed for the
+collapse itself — keeps the page light until something is actually opened),
+and a small inline <script> drives client-side hostname filtering only."""
 import html
 from datetime import datetime, timezone
 
@@ -51,28 +55,34 @@ def _card(finding, leg):
     if finding.get("raw"):
         raw_html = f'<h4>Raw response</h4><pre class="code-box raw-box">{_esc(finding["raw"])}</pre>'
 
+    # data-target carries a lowercased copy for the search filter — cheaper
+    # than re-lowercasing target text on every keystroke across thousands
+    # of entries.
     return (
-        '<div class="card">'
-        '<div class="card-head">'
+        f'<details class="card" data-target="{_esc(target.lower())}">'
+        '<summary class="card-head">'
+        '<span class="card-title">'
+        '<span class="caret" aria-hidden="true">&#9656;</span>'
         f'<span class="target">{_esc(target)}</span>'
+        '</span>'
         f'<span class="badges">{_leg_badge(leg)}{_badge(outcome)}</span>'
-        '</div>'
+        '</summary>'
+        '<div class="card-body">'
         f'{"".join(rows)}'
         f'{command_html}{raw_html}'
         '</div>'
+        '</details>'
     )
 
 
-def render_html_report(requested_entries, findings, hostnames):
+def render_html_report(findings, hostnames):
     total = len(findings)
+    unreachable_count = sum(1 for f in findings if f.get("outcome") == "unreachable")
+    live_count = total - unreachable_count
     pq_count = sum(1 for f in findings if f.get("outcome") == "pq")
-    not_pq_count = total - pq_count
-    pct = round(pq_count / total * 100) if total else 0
-    edge_count = sum(1 for f in findings if f.get("ip") in hostnames)
-    origin_count = total - edge_count
+    non_pq_count = live_count - pq_count
+    live_pct = round(pq_count / live_count * 100) if live_count else 0
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-
-    chips = "".join(f'<span class="chip">{_esc(e)}</span>' for e in requested_entries)
 
     cards = "".join(
         _card(f, "edge" if f.get("ip") in hostnames else "origin")
@@ -116,26 +126,23 @@ def render_html_report(requested_entries, findings, hostnames):
   .brand .brand-mark {{ color: #2ecc71; }}
 
   h1 {{ font-size: 28px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 6px; }}
-  .subtitle {{ color: var(--text-secondary); font-size: 14px; margin: 0 0 20px; }}
+  .subtitle {{ color: var(--text-secondary); font-size: 14px; margin: 0 0 24px; }}
 
-  .chips {{ display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 28px; }}
-  .chip {{ background: var(--surface-1); border: 1px solid var(--border); border-radius: 999px;
-    padding: 4px 12px; font-size: 12px; color: var(--text-secondary); font-family: var(--mono); }}
-
-  .summary {{ display: flex; gap: 16px; margin-bottom: 32px; flex-wrap: wrap; }}
-  .stat-tile {{ background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
-    padding: 18px 20px; min-width: 180px; flex: 1; }}
-  .stat-tile-label {{ font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;
+  .summary {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 24px; }}
+  .stat-tile {{ background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }}
+  .stat-tile.highlight {{ border-color: var(--status-good); }}
+  .stat-tile-label {{ font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;
     text-transform: uppercase; letter-spacing: 0.04em; }}
-  .stat-tile-total {{ font-size: 34px; font-weight: 700; color: var(--text-primary); line-height: 1;
-    margin-bottom: 10px; letter-spacing: -0.02em; }}
-  .stat-tile-row {{ display: flex; gap: 8px; flex-wrap: wrap; }}
-  .stat-chip {{ display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px;
-    border-radius: 999px; font-size: 12px; font-weight: 600; }}
-  .stat-chip.good {{ background: rgba(12,163,12,0.16); color: #3fd63f; }}
-  .stat-chip.critical {{ background: rgba(230,103,103,0.16); color: #ff9a9a; }}
-  .stat-chip.neutral {{ background: var(--surface-2); border: 1px solid var(--border); color: var(--text-secondary); }}
-  .stat-chip .dot {{ width: 6px; height: 6px; border-radius: 50%; background: currentColor; display: inline-block; }}
+  .stat-tile-total {{ font-size: 30px; font-weight: 700; color: var(--text-primary); line-height: 1; letter-spacing: -0.02em; }}
+  .stat-tile-total.good {{ color: #3fd63f; }}
+  .stat-tile-total.critical {{ color: #ff9a9a; }}
+
+  .search-row {{ display: flex; align-items: center; gap: 12px; margin: 0 0 20px; flex-wrap: wrap; }}
+  .search-input {{ flex: 1; min-width: 220px; background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; font-size: 14px; color: var(--text-primary); font-family: var(--mono); }}
+  .search-input:focus {{ outline: none; border-color: var(--text-secondary); }}
+  .search-input::placeholder {{ color: var(--text-muted); }}
+  .search-count {{ font-size: 12px; color: var(--text-muted); white-space: nowrap; }}
 
   .badge {{ display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px;
     font-size: 12px; font-weight: 600; color: #fff; white-space: nowrap; }}
@@ -145,15 +152,20 @@ def render_html_report(requested_entries, findings, hostnames):
   .badge.unknown {{ background: var(--status-unknown); }}
   .badge.leg {{ background: var(--surface-2); border: 1px solid var(--border); color: var(--text-secondary); }}
 
-  .card {{ background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
-    padding: 18px 20px; margin-bottom: 16px; }}
-  .card-head {{ display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    flex-wrap: wrap; margin-bottom: 12px; }}
-  .card-head .target {{ font-size: 16px; font-weight: 700; font-family: var(--mono); word-break: break-all; }}
-  .card-head .badges {{ display: flex; gap: 8px; align-items: center; }}
+  details.card {{ background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    margin-bottom: 8px; overflow: hidden; }}
+  details.card summary {{ list-style: none; cursor: pointer; padding: 12px 16px; display: flex; align-items: center;
+    justify-content: space-between; gap: 12px; flex-wrap: wrap; }}
+  details.card summary::-webkit-details-marker {{ display: none; }}
+  details.card .card-title {{ display: flex; align-items: center; gap: 8px; min-width: 0; }}
+  details.card .caret {{ color: var(--text-muted); display: inline-block; transition: transform .12s ease; flex-shrink: 0; }}
+  details.card[open] .caret {{ transform: rotate(90deg); }}
+  details.card .target {{ font-size: 14px; font-weight: 700; font-family: var(--mono); word-break: break-all; }}
+  details.card .badges {{ display: flex; gap: 8px; align-items: center; flex-shrink: 0; }}
+  .card-body {{ padding: 0 16px 16px; }}
   .kv {{ font-size: 13px; color: var(--text-secondary); margin: 0 0 4px; }}
   .kv b {{ color: var(--text-muted); font-weight: 600; }}
-  .card h4 {{ margin: 14px 0 6px; font-size: 12px; font-weight: 600; color: var(--text-primary);
+  details.card h4 {{ margin: 14px 0 6px; font-size: 12px; font-weight: 600; color: var(--text-primary);
     text-transform: uppercase; letter-spacing: 0.04em; }}
   pre.code-box {{ margin: 0; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border);
     border-radius: 6px; font-family: var(--mono); font-size: 12px; line-height: 1.5; color: var(--text-secondary);
@@ -172,31 +184,45 @@ def render_html_report(requested_entries, findings, hostnames):
   <h1>Scan Report</h1>
   <p class="subtitle">Requested {total} {target_word} &middot; {timestamp}</p>
 
-  <div class="chips">{chips}</div>
-
   <div class="summary">
-    <div class="stat-tile">
-      <div class="stat-tile-label">Compliance</div>
-      <div class="stat-tile-total">{pct}%</div>
-      <div class="stat-tile-row">
-        <span class="stat-chip good"><span class="dot"></span>{pq_count} PQ</span>
-        <span class="stat-chip critical"><span class="dot"></span>{not_pq_count} not PQ</span>
-      </div>
-    </div>
-    <div class="stat-tile">
-      <div class="stat-tile-label">Total scanned</div>
-      <div class="stat-tile-total">{total}</div>
-      <div class="stat-tile-row">
-        <span class="stat-chip neutral"><span class="dot"></span>{edge_count} edge (hostname)</span>
-        <span class="stat-chip neutral"><span class="dot"></span>{origin_count} origin (direct)</span>
-      </div>
-    </div>
+    <div class="stat-tile"><div class="stat-tile-label">Scanned</div><div class="stat-tile-total">{total}</div></div>
+    <div class="stat-tile"><div class="stat-tile-label">Live</div><div class="stat-tile-total">{live_count}</div></div>
+    <div class="stat-tile"><div class="stat-tile-label">Dead</div><div class="stat-tile-total">{unreachable_count}</div></div>
+    <div class="stat-tile"><div class="stat-tile-label">PQ</div><div class="stat-tile-total good">{pq_count}</div></div>
+    <div class="stat-tile"><div class="stat-tile-label">Non-PQ</div><div class="stat-tile-total critical">{non_pq_count}</div></div>
+    <div class="stat-tile highlight"><div class="stat-tile-label">PQ of Live</div><div class="stat-tile-total">{live_pct}%</div></div>
   </div>
 
+  <div class="search-row">
+    <input type="text" id="search" class="search-input" placeholder="Filter by hostname (partial match)&hellip;" autocomplete="off">
+    <span class="search-count" id="search-count">{total} of {total} shown</span>
+  </div>
+
+  <div id="results">
   {cards}
+  </div>
 
   <footer>Generated by <a class="brand-link" href="https://pqradar.net"><span class="brand-mark">PQRADAR</span>.NET</a> &mdash; same handshake classifier as the hosted tool, run standalone via the CLI.</footer>
 </div>
+<script>
+(function () {{
+  var input = document.getElementById("search");
+  var counter = document.getElementById("search-count");
+  var cards = Array.prototype.slice.call(document.querySelectorAll(".card"));
+  var total = cards.length;
+
+  input.addEventListener("input", function () {{
+    var q = input.value.trim().toLowerCase();
+    var shown = 0;
+    cards.forEach(function (card) {{
+      var match = !q || card.getAttribute("data-target").indexOf(q) !== -1;
+      card.style.display = match ? "" : "none";
+      if (match) shown++;
+    }});
+    counter.textContent = shown + " of " + total + " shown";
+  }});
+}})();
+</script>
 </body>
 </html>
 """

@@ -17,5 +17,12 @@ wrangler.local.jsonc
 # Stray scratch/debug output
 _scale_check.json
 
+# CLI scan inputs/outputs — real hostnames and raw handshake data from
+# whatever you point the standalone scanner at, never safe to publish
+*.subdomains.txt
+lpl-subdomains.txt
+report*.json
+report*.html
+
 # OS/editor cruft
 .DS_Store
