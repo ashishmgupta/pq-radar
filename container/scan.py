@@ -11,6 +11,7 @@ import re
 import sys
 
 from probe import run_scan_streaming
+from report import render_html_report
 
 PORT = 443
 LIVENESS_TIMEOUT_MS = 1500
@@ -64,7 +65,7 @@ def build_targets(args):
         subnets.append(subnet)
         if leg == "edge":
             hostnames.add(entry)
-    return subnets, hostnames
+    return subnets, hostnames, entries
 
 
 def report_progress(event):
@@ -81,10 +82,14 @@ def main():
     )
     parser.add_argument("targets", nargs="*", metavar="TARGET", help="hostnames and/or CIDR ranges to scan")
     parser.add_argument("--file", metavar="PATH", help="read targets from a file, one per line (# comments ignored)")
-    parser.add_argument("--out", metavar="PATH", help="write the JSON report here instead of stdout")
+    parser.add_argument(
+        "--out", metavar="PATH",
+        help="write the report here instead of stdout — .html for a dark-mode HTML report, "
+             "anything else (or omitted) for JSON",
+    )
     args = parser.parse_args()
 
-    subnets, hostnames = build_targets(args)
+    subnets, hostnames, entries = build_targets(args)
 
     findings = asyncio.run(run_scan_streaming(
         subnets, PORT, LIVENESS_TIMEOUT_MS, HANDSHAKE_TIMEOUT_MS, CONCURRENCY, report_progress,
@@ -96,8 +101,10 @@ def main():
         # or CIDR entry connects directly, so that leg is the origin itself.
         finding["leg"] = "edge" if finding["ip"] in hostnames else "origin"
 
-    report = {"total": len(findings), "findings": findings}
-    output = json.dumps(report, indent=2)
+    if args.out and args.out.lower().endswith(".html"):
+        output = render_html_report(entries, findings, hostnames)
+    else:
+        output = json.dumps({"total": len(findings), "findings": findings}, indent=2)
 
     if args.out:
         with open(args.out, "w", encoding="utf-8") as f:
