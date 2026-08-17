@@ -18,11 +18,13 @@ wrangler.local.jsonc
 _scale_check.json
 
 # CLI scan inputs/outputs — real hostnames and raw handshake data from
-# whatever you point the standalone scanner at, never safe to publish
+# whatever you point the standalone scanner at, never safe to publish.
+# Wildcarded on both sides since --out naming isn't consistent
+# (report.html, subnet-report.html, lpl-subdomains-report.html, ...).
 *.subdomains.txt
 lpl-subdomains.txt
-report*.json
-report*.html
+*report*.json
+*report*.html
 
 # OS/editor cruft
 .DS_Store
