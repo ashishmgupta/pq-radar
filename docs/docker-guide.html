@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PQ Radar — Docker Publishing Guide</title>
+<style>
+  :root{
+    --bg:#0a0a0a;
+    --panel:#111214;
+    --panel-2:#16181b;
+    --border:#24272c;
+    --border-soft:#1c1f23;
+    --ink:#e7e9ea;
+    --ink-dim:#9aa0a6;
+    --ink-faint:#6b7280;
+    --green:#22c55e;
+    --green-dim:#15803d;
+    --red:#ef4444;
+    --amber:#f59e0b;
+    --mono:'JetBrains Mono','SF Mono',ui-monospace,'Cascadia Code','Consolas',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--mono);
+    line-height:1.65;
+    font-size:15px;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--green);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  .layout{display:grid;grid-template-columns:280px 1fr;max-width:1200px;margin:0 auto;min-height:100vh}
+
+  /* ---- Sidebar ---- */
+  aside{
+    border-right:1px solid var(--border);
+    padding:36px 20px 60px 28px;
+    position:sticky;top:0;height:100vh;overflow-y:auto;
+  }
+  .brand{font-size:19px;font-weight:700;letter-spacing:.5px;margin-bottom:2px}
+  .brand .net{color:var(--ink-faint)}
+  .brand .pq{color:var(--green)}
+  .brand-sub{font-size:11px;color:var(--ink-faint);letter-spacing:2px;text-transform:uppercase;margin-bottom:32px}
+  nav ol{list-style:none;counter-reset:step}
+  nav li{counter-increment:step;margin:2px 0}
+  nav a{
+    display:block;color:var(--ink-dim);padding:7px 10px 7px 34px;
+    border-radius:6px;position:relative;font-size:13px;line-height:1.4;
+    border-left:2px solid transparent;transition:all .15s;
+  }
+  nav a::before{
+    content:counter(step,decimal-leading-zero);
+    position:absolute;left:8px;top:7px;font-size:11px;color:var(--ink-faint);
+  }
+  nav a:hover{background:var(--panel);color:var(--ink);text-decoration:none}
+  nav a.active{background:var(--panel-2);color:var(--green);border-left-color:var(--green)}
+  nav a.active::before{color:var(--green)}
+  .nav-note{margin-top:28px;font-size:11px;color:var(--ink-faint);line-height:1.6;padding:0 10px}
+
+  /* ---- Main ---- */
+  main{padding:44px 56px 140px 56px;max-width:820px}
+  .doc-head{margin-bottom:40px;padding-bottom:28px;border-bottom:1px solid var(--border)}
+  .doc-head h1{font-size:28px;font-weight:700;letter-spacing:-.3px;margin-bottom:12px}
+  .doc-head p{color:var(--ink-dim);font-size:14px;max-width:640px}
+  .doc-head .lead-tag{
+    display:inline-block;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;
+    color:var(--green);border:1px solid var(--green-dim);border-radius:4px;
+    padding:3px 9px;margin-bottom:18px;
+  }
+
+  section{margin-bottom:52px;scroll-margin-top:24px}
+  .sec-num{font-size:12px;color:var(--ink-faint);letter-spacing:2px}
+  section h2{font-size:20px;font-weight:700;margin:6px 0 8px;letter-spacing:-.2px}
+  section h2 .g{color:var(--green)}
+  .sec-intro{color:var(--ink-dim);font-size:14px;margin-bottom:20px;max-width:660px}
+  section h3{font-size:14px;font-weight:600;color:var(--ink);margin:24px 0 8px;letter-spacing:.2px}
+
+  p{margin-bottom:12px}
+  .body-txt{color:var(--ink-dim);font-size:13.5px}
+  ul.plain{list-style:none;margin:10px 0 14px}
+  ul.plain li{color:var(--ink-dim);font-size:13.5px;padding-left:20px;position:relative;margin-bottom:7px}
+  ul.plain li::before{content:'→';position:absolute;left:0;color:var(--green-dim)}
+
+  /* ---- Code blocks ---- */
+  .code{
+    background:#050506;border:1px solid var(--border);border-radius:8px;
+    margin:14px 0;overflow:hidden;
+  }
+  .code-bar{
+    display:flex;align-items:center;gap:8px;padding:8px 14px;
+    background:var(--panel);border-bottom:1px solid var(--border-soft);
+    font-size:11px;color:var(--ink-faint);letter-spacing:.5px;
+  }
+  .code-bar .dot{width:9px;height:9px;border-radius:50%;background:#2a2d31}
+  .code-bar .label{margin-left:6px}
+  .code-bar .copy{margin-left:auto;color:var(--ink-faint);font-size:11px;cursor:default;border:1px solid var(--border);padding:2px 8px;border-radius:4px}
+  pre{padding:14px 16px;overflow-x:auto;font-size:13px;line-height:1.7}
+  code{font-family:var(--mono)}
+  .cmd{color:var(--ink)}
+  .cmt{color:var(--ink-faint)}
+  .flag{color:var(--green)}
+  .str{color:var(--amber)}
+  .kw{color:#7dd3fc}
+
+  /* ---- Callouts ---- */
+  .note{
+    border-left:3px solid var(--green-dim);background:var(--panel);
+    padding:12px 16px;border-radius:0 6px 6px 0;margin:16px 0;font-size:13px;color:var(--ink-dim);
+  }
+  .note strong{color:var(--green)}
+  .warn{
+    border-left:3px solid var(--amber);background:var(--panel);
+    padding:12px 16px;border-radius:0 6px 6px 0;margin:16px 0;font-size:13px;color:var(--ink-dim);
+  }
+  .warn strong{color:var(--amber)}
+  .danger{border-left:3px solid var(--red);background:var(--panel);padding:12px 16px;border-radius:0 6px 6px 0;margin:16px 0;font-size:13px;color:var(--ink-dim)}
+  .danger strong{color:var(--red)}
+
+  .verify{
+    display:flex;gap:10px;align-items:flex-start;background:var(--panel-2);
+    border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin:16px 0;font-size:13px;
+  }
+  .verify .chk{color:var(--green);font-weight:700;flex-shrink:0}
+  .verify .vtxt{color:var(--ink-dim)}
+  .verify .vtxt b{color:var(--ink)}
+
+  .kbd{background:var(--panel-2);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:12px;color:var(--ink)}
+  .inline-code{background:var(--panel-2);border:1px solid var(--border-soft);border-radius:4px;padding:1px 6px;font-size:12.5px;color:var(--green)}
+
+  .divider{height:1px;background:var(--border-soft);margin:20px 0}
+
+  footer{border-top:1px solid var(--border);padding-top:24px;margin-top:40px;color:var(--ink-faint);font-size:12px}
+
+  @media (max-width:860px){
+    .layout{grid-template-columns:1fr}
+    aside{display:none}
+    main{padding:32px 22px 80px}
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <aside>
+    <div class="brand"><span class="pq">PQRADAR</span><span class="net">.NET</span></div>
+    <div class="brand-sub">Docker Guide</div>
+    <nav>
+      <ol>
+        <li><a href="#concepts" class="active">Understand the pieces</a></li>
+        <li><a href="#prep">Confirm Docker works</a></li>
+        <li><a href="#hub">Create a Docker Hub account</a></li>
+        <li><a href="#files">Lay out the build files</a></li>
+        <li><a href="#build">Build the image locally</a></li>
+        <li><a href="#test">Test it against a real host</a></li>
+        <li><a href="#tag">Tag for Docker Hub</a></li>
+        <li><a href="#push">Log in and push</a></li>
+        <li><a href="#document">Document the pull command</a></li>
+        <li><a href="#maintain">Rebuild when code changes</a></li>
+      </ol>
+    </nav>
+    <div class="nav-note">
+      Every command is meant to run in <b>PowerShell</b> or Windows Terminal, from the folder that holds your build files.
+    </div>
+  </aside>
+
+  <main>
+    <div class="doc-head">
+      <span class="lead-tag">From zero to a pullable image</span>
+      <h1>Publishing the PQ Radar scanner as a Docker image</h1>
+      <p>This walks from "Docker Desktop is installed and nothing else exists" all the way to a public image anyone can pull and run against their own domains or CIDR ranges — no Cloudflare account, no cloud, just OpenSSL 3.5 in a box. Read top to bottom the first time; each step ends with a check so you know it worked before moving on.</p>
+    </div>
+
+    <!-- 1 -->
+    <section id="concepts">
+      <div class="sec-num">STEP 01</div>
+      <h2>Understand the four pieces<span class="g">.</span></h2>
+      <p class="sec-intro">Docker's vocabulary is the only genuinely confusing part. Four words, and the rest is mechanical.</p>
+      <ul class="plain">
+        <li><b>Dockerfile</b> — a plain text recipe. No extension, just the name <span class="inline-code">Dockerfile</span>. It lists the base OS, what to install, and what to run.</li>
+        <li><b>Image</b> — the frozen result of building that recipe. A sealed filesystem with OpenSSL 3.5 and your probe already inside.</li>
+        <li><b>Registry</b> — where images live so others can download them. Docker Hub is the free public one, the "GitHub for images."</li>
+        <li><b>Container</b> — a running copy of an image. When someone does <span class="inline-code">docker run</span>, they spin up a container from your image, it scans, prints a report, and exits.</li>
+      </ul>
+      <div class="note">
+        <strong>The flow in one line:</strong> you write a <b>Dockerfile</b> → <span class="inline-code">docker build</span> turns it into an <b>image</b> → <span class="inline-code">docker push</span> sends it to the <b>registry</b> → a stranger runs <span class="inline-code">docker pull</span> + <span class="inline-code">docker run</span> and gets a <b>container</b>. They never see your Dockerfile.
+      </div>
+    </section>
+
+    <!-- 2 -->
+    <section id="prep">
+      <div class="sec-num">STEP 02</div>
+      <h2>Confirm Docker actually works<span class="g">.</span></h2>
+      <p class="sec-intro">Before building anything, prove the engine is running. Open <b>PowerShell</b> (or Windows Terminal) and make sure the Docker Desktop whale icon in your system tray is steady, not animating.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot"></span><span class="label">PowerShell</span><span class="copy">copy</span></div>
+<pre><code><span class="cmt"># Should print a version, e.g. "Docker version 27.x"</span>
+<span class="cmd">docker --version</span>
+
+<span class="cmt"># The real proof — pulls a tiny test image and runs it</span>
+<span class="cmd">docker run --rm hello-world</span></code></pre>
+      </div>
+      <div class="verify">
+        <span class="chk">✓</span>
+        <span class="vtxt"><b>Check:</b> the second command prints "Hello from Docker!" If it errors with something about the daemon or pipe, Docker Desktop isn't running — start it, wait for the whale to go steady, and retry.</span>
+      </div>
+    </section>
+
+    <!-- 3 -->
+    <section id="hub">
+      <div class="sec-num">STEP 03</div>
+      <h2>Create a Docker Hub account<span class="g">.</span></h2>
+      <p class="sec-intro">This is where your image will live publicly. The username you pick becomes part of the pull command everyone uses, so choose it deliberately.</p>
+      <ul class="plain">
+        <li>Go to <a href="https://hub.docker.com" target="_blank" rel="noopener">hub.docker.com</a> and sign up. A free account allows unlimited public images.</li>
+        <li>Pick a username you're happy to be public — e.g. <span class="inline-code">ashishmgupta</span>. Your image will be pulled as <span class="inline-code">ashishmgupta/pqradar</span>.</li>
+        <li>Verify your email. That's the whole account setup.</li>
+      </ul>
+      <div class="note"><strong>Naming ahead:</strong> the image's public name is <b>username/repository</b>. Decide the repository name now — <span class="inline-code">pqradar</span> is clean and matches the site. You'll use <span class="inline-code">ashishmgupta/pqradar</span> throughout the rest of this guide; swap in your real username.</div>
+    </section>
+
+    <!-- 4 -->
+    <section id="files">
+      <div class="sec-num">STEP 04</div>
+      <h2>Lay out the build files<span class="g">.</span></h2>
+      <p class="sec-intro">Make one folder on your machine that holds everything the build needs. Nothing else from your repo has to be here — just the probe and the recipe.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot"></span><span class="label">folder layout</span><span class="copy">copy</span></div>
+<pre><code>pqradar-cli\
+├── Dockerfile        <span class="cmt"># the recipe (Step 05 defines it)</span>
+├── scan.py           <span class="cmt"># CLI wrapper: reads a CSV, calls the probe</span>
+└── probe.py          <span class="cmt"># your existing container/server.py probe core</span></code></pre>
+      </div>
+      <p class="body-txt">The <span class="inline-code">probe.py</span> is your current <span class="inline-code">container/server.py</span> logic — the OpenSSL handshake and <span class="inline-code">parse_probe_output</span> parsing you already have. The <span class="inline-code">scan.py</span> is a thin new wrapper that takes a CSV of hostnames (<span class="inline-code">--domains</span>) or CIDRs (<span class="inline-code">--cidrs</span>), runs each through the probe, and writes a report. Your <span class="inline-code">expand_targets()</span> already accepts hostnames, single IPs, and CIDRs, so the wrapper mostly just parses arguments and formats output.</p>
+      <div class="warn"><strong>Don't fork the verdict logic.</strong> The handshake-parsing code that decides pq / classical / downgrade should exist <b>once</b> and be imported by both the hosted Worker path and this CLI. If the two ever disagree on what counts as "classical," trust in the tool erodes. Same core, two entry points — that's the rule to hand Claude Code when it writes <span class="inline-code">scan.py</span>.</div>
+      <div class="verify"><span class="chk">✓</span><span class="vtxt"><b>Check:</b> from PowerShell, <span class="inline-code">cd</span> into <span class="inline-code">pqradar-cli</span> and run <span class="inline-code">dir</span>. You should see the three files listed.</span></div>
+    </section>
+
+    <!-- 5 -->
+    <section id="build">
+      <div class="sec-num">STEP 05</div>
+      <h2>Write the Dockerfile &amp; build<span class="g">.</span></h2>
+      <p class="sec-intro">Here's the recipe. The single most important line is the base image — <b>Ubuntu 25.10 ships OpenSSL 3.5.3 with native ML-KEM</b>, so a plain <span class="inline-code">apt install openssl</span> gets you a post-quantum-capable OpenSSL. No compiling from source like you did at <span class="inline-code">/opt</span> on your dev box.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot"></span><span class="label">Dockerfile</span><span class="copy">copy</span></div>
+<pre><code><span class="kw">FROM</span> ubuntu:25.10
+
+<span class="kw">RUN</span> apt-get update && apt-get install -y --no-install-recommends \
+    openssl python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+<span class="kw">WORKDIR</span> /app
+<span class="kw">COPY</span> probe.py scan.py ./
+
+<span class="cmt"># So `docker run image ...args` passes args straight to the scanner</span>
+<span class="kw">ENTRYPOINT</span> [<span class="str">"python3"</span>, <span class="str">"scan.py"</span>]</code></pre>
+      </div>
+      <p class="body-txt">Now build it. The <span class="flag">-t</span> flag "tags" (names) the image. The trailing <span class="inline-code">.</span> means "use the Dockerfile in this current folder" — don't miss it.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot"></span><span class="label">PowerShell — inside pqradar-cli\</span><span class="copy">copy</span></div>
+<pre><code><span class="cmd">docker build <span class="flag">-t</span> pqradar <span class="cmd">.</span></span></code></pre>
+      </div>
+      <div class="verify"><span class="chk">✓</span><span class="vtxt"><b>Check:</b> the build ends with <span class="inline-code">naming to docker.io/library/pqradar</span>. Run <span class="inline-code">docker images</span> and you'll see <span class="inline-code">pqradar</span> in the list. It only exists on your machine so far.</span></div>
+      <div class="note"><strong>First build is slow, later ones are fast.</strong> Docker caches each step. Change only <span class="inline-code">scan.py</span> and the next build reuses the OS + OpenSSL layers, finishing in seconds.</div>
+    </section>
+
+    <!-- 6 -->
+    <section id="test">
+      <div class="sec-num">STEP 06</div>
+      <h2>Test it against a real host<span class="g">.</span></h2>
+      <p class="sec-intro">Never push an untested image. Run it locally first against a target with a known answer. Cloudflare negotiates ML-KEM by default, so it's your positive control; a host still on classical is your negative control.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot"></span><span class="label">PowerShell</span><span class="copy">copy</span></div>
+<pre><code><span class="cmt"># Positive control — should report ML-KEM / pq</span>
+<span class="cmd">docker run <span class="flag">--rm</span> pqradar <span class="flag">--domains</span> cloudflare.com</span>
+
+<span class="cmt"># Mount a CSV from your machine and scan a list</span>
+<span class="cmt"># %cd% is the current folder on Windows PowerShell</span>
+<span class="cmd">docker run <span class="flag">--rm</span> <span class="flag">-v</span> <span class="str">"%cd%:/data"</span> pqradar <span class="flag">--domains</span> /data/domains.csv <span class="flag">--out</span> /data/report.json</span></code></pre>
+      </div>
+      <p class="body-txt">The <span class="flag">-v</span> flag mounts a folder from your PC into the container at <span class="inline-code">/data</span>, so the container can read your CSV and write the report back out where you can see it. Without it, the container is sealed and can't touch your files.</p>
+      <div class="verify"><span class="chk">✓</span><span class="vtxt"><b>Check:</b> the Cloudflare scan reports a post-quantum verdict (the negotiated group is <span class="inline-code">X25519MLKEM768</span>). If it says classical, your image's OpenSSL isn't offering ML-KEM — confirm the base is <span class="inline-code">ubuntu:25.10</span>, not an older tag.</span></div>
+      <div class="warn"><strong>Label the leg in the report.</strong> A domain scan hits whatever DNS returns — for a CDN-fronted host that's the <b>edge</b>, not the origin. Make the report say so, or someone scans ten domains, sees all-green, and concludes they're covered — the exact misread PQ Radar exists to prevent.</div>
+    </section>
+
+    <!-- 7 -->
+    <section id="tag">
+      <div class="sec-num">STEP 07</div>
+      <h2>Tag the image for Docker Hub<span class="g">.</span></h2>
+      <p class="sec-intro">Right now the image is just <span class="inline-code">pqradar</span> — a local name. To push it, it needs your Hub username in front so the registry knows where it belongs. A <b>version tag</b> after the colon lets people pin a known-good build.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot"></span><span class="label">PowerShell</span><span class="copy">copy</span></div>
+<pre><code><span class="cmt"># Give it two tags: a version and "latest"</span>
+<span class="cmd">docker tag pqradar ashishmgupta/pqradar:1.0</span>
+<span class="cmd">docker tag pqradar ashishmgupta/pqradar:latest</span></code></pre>
+      </div>
+      <div class="note"><strong>Why two tags:</strong> <span class="inline-code">1.0</span> is a permanent snapshot people can rely on not to change under them. <span class="inline-code">latest</span> is what someone gets if they don't specify a version. Publishing both is standard courtesy.</div>
+      <div class="verify"><span class="chk">✓</span><span class="vtxt"><b>Check:</b> <span class="inline-code">docker images</span> now shows the same image ID under three names. Tags are just labels pointing at one build — no extra disk used.</span></div>
+    </section>
+
+    <!-- 8 -->
+    <section id="push">
+      <div class="sec-num">STEP 08</div>
+      <h2>Log in and push<span class="g">.</span></h2>
+      <p class="sec-intro">Authenticate once, then upload. The push sends only the layers Docker Hub doesn't already have, so it's faster than the byte count suggests.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot"></span><span class="label">PowerShell</span><span class="copy">copy</span></div>
+<pre><code><span class="cmt"># Prompts for your Docker Hub username + password (or access token)</span>
+<span class="cmd">docker login</span>
+
+<span class="cmd">docker push ashishmgupta/pqradar:1.0</span>
+<span class="cmd">docker push ashishmgupta/pqradar:latest</span></code></pre>
+      </div>
+      <div class="warn"><strong>If login rejects your password:</strong> Docker Hub increasingly requires an <b>access token</b> instead of your account password on the command line. Create one at Hub → Account Settings → Personal access tokens, then paste the token where it asks for a password.</div>
+      <div class="verify"><span class="chk">✓</span><span class="vtxt"><b>Check:</b> refresh your repositories page at <a href="https://hub.docker.com/repositories" target="_blank" rel="noopener">hub.docker.com/repositories</a>. <span class="inline-code">pqradar</span> appears with both tags. It's now public — anyone on earth can pull it.</span></div>
+    </section>
+
+    <!-- 9 -->
+    <section id="document">
+      <div class="sec-num">STEP 09</div>
+      <h2>Document the pull command<span class="g">.</span></h2>
+      <p class="sec-intro">A published image nobody knows how to run is invisible. Put the exact two-line quickstart in your README and on the site — this is the payoff that makes the whole thing usable without a Cloudflare account.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot"></span><span class="label">README — Quickstart</span><span class="copy">copy</span></div>
+<pre><code><span class="cmt"># Scan a single domain</span>
+<span class="cmd">docker run <span class="flag">--rm</span> ashishmgupta/pqradar <span class="flag">--domains</span> example.com</span>
+
+<span class="cmt"># Scan a list, write a report next to your CSV</span>
+<span class="cmd">docker run <span class="flag">--rm</span> <span class="flag">-v</span> <span class="str">"$(pwd):/data"</span> ashishmgupta/pqradar \
+    <span class="flag">--domains</span> /data/domains.csv <span class="flag">--out</span> /data/report.json</span>
+
+<span class="cmt"># Scan CIDR ranges instead</span>
+<span class="cmd">docker run <span class="flag">--rm</span> <span class="flag">-v</span> <span class="str">"$(pwd):/data"</span> ashishmgupta/pqradar \
+    <span class="flag">--cidrs</span> /data/ranges.csv <span class="flag">--out</span> /data/report.json</span></code></pre>
+      </div>
+      <div class="note"><strong>Cross-platform note:</strong> the README uses <span class="inline-code">$(pwd)</span> (Mac/Linux). On Windows PowerShell that's <span class="inline-code">${PWD}</span>; on classic Command Prompt it's <span class="inline-code">%cd%</span>. Worth a one-line note so nobody trips on it.</div>
+    </section>
+
+    <!-- 10 -->
+    <section id="maintain">
+      <div class="sec-num">STEP 10</div>
+      <h2>Rebuild when the code changes<span class="g">.</span></h2>
+      <p class="sec-intro">Whenever you improve the probe, the update cycle is the same three commands. Bump the version so people who pinned <span class="inline-code">1.0</span> stay stable and new pullers get the fix.</p>
+      <div class="code">
+        <div class="code-bar"><span class="dot"></span><span class="label">PowerShell — the whole update loop</span><span class="copy">copy</span></div>
+<pre><code><span class="cmd">docker build <span class="flag">-t</span> pqradar <span class="cmd">.</span></span>
+<span class="cmd">docker tag pqradar ashishmgupta/pqradar:1.1</span>
+<span class="cmd">docker tag pqradar ashishmgupta/pqradar:latest</span>
+<span class="cmd">docker push ashishmgupta/pqradar:1.1</span>
+<span class="cmd">docker push ashishmgupta/pqradar:latest</span></code></pre>
+      </div>
+      <div class="note"><strong>Later, automate it.</strong> Once this is comfortable by hand, a GitHub Action can build and push on every release tag — but do it manually a few times first so you understand what the automation is doing.</div>
+      <div class="divider"></div>
+      <p class="body-txt">That's the full arc: recipe → image → registry → a command anyone can run. The scanner that proved your F5 origin was falling back to classical is now something a stranger can point at their own estate in under a minute, with no account and no cloud.</p>
+    </section>
+
+    <footer>
+      PQ Radar · Docker publishing guide · Commands target Docker Desktop on Windows (PowerShell). Replace <span class="inline-code">ashishmgupta</span> with your Docker Hub username throughout.
+    </footer>
+  </main>
+</div>
+
+<script>
+  // Scrollspy: highlight the sidebar link for the section in view
+  const links = [...document.querySelectorAll('nav a')];
+  const map = {};
+  links.forEach(a=>{const id=a.getAttribute('href').slice(1);map[id]=a;});
+  const obs = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{
+      if(e.isIntersecting){
+        links.forEach(l=>l.classList.remove('active'));
+        map[e.target.id]?.classList.add('active');
+      }
+    });
+  },{rootMargin:'-20% 0px -70% 0px',threshold:0});
+  document.querySelectorAll('section').forEach(s=>obs.observe(s));
+</script>
+</body>
+</html>
