@@ -108,6 +108,34 @@ references them by name). They use public test targets
 (`cloudflare.com`, `badssl.com`, the reserved `192.0.2.1` documentation
 range) so they're safe to run as-is.
 
+## Standalone CLI (no Cloudflare account needed)
+
+Prefer not to deploy the Worker at all? `container/scan.py` runs the exact
+same TLS handshake classifier as the hosted tool, in a small Docker image,
+against your own domains or CIDR ranges — no account, no cloud dependency,
+just OpenSSL 3.5 in a container.
+
+```
+docker build -f container/Dockerfile.cli -t pqradar container/
+docker run --rm pqradar example.com
+docker run --rm pqradar example.com api.example.com 10.0.0.0/24
+docker run --rm -v "$(pwd):/data" pqradar --file /data/targets.txt --out /data/report.json
+```
+
+Targets are positional and auto-classified — a hostname or a CIDR/IP, mixed
+freely in one run. `--file` reads one target per line (`#` comments and
+blank lines ignored); `--out` writes JSON instead of printing to stdout.
+Every result is labeled by leg: a hostname target resolves through DNS like
+a browser would, so a CDN-fronted host is scanned at its **edge**, not its
+origin; a bare IP or CIDR entry connects directly, so that leg is the
+**origin** itself.
+
+v1 is TLS/HTTPS on port 443 only — SSH and FTPS aren't wired into the CLI
+yet (the hosted Worker path covers those).
+
+See [docs/docker-guide.html](docs/docker-guide.html) for the step-by-step
+walkthrough, including publishing your own build to Docker Hub.
+
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE).
