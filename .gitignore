@@ -26,5 +26,8 @@ lpl-subdomains.txt
 *report*.json
 *report*.html
 
+# Local-only, never checked in — kept out of the public repo on request
+docs/voice-chat-brief.html
+
 # OS/editor cruft
 .DS_Store
