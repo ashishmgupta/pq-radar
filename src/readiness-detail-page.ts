@@ -135,11 +135,7 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
       <div id="content" style="display:none">
         <div id="view-hostnames" style="display:none">
           <div class="legend" id="outcome-legend"></div>
-          <div class="filter-toggle" id="env-filter">
-            <button data-env="all" type="button">All</button>
-            <button data-env="dev" type="button">Dev</button>
-            <button data-env="qa" type="button">QA</button>
-          </div>
+          <div class="filter-toggle" id="env-filter"></div>
           <div class="table-wrap">
             <table>
               <colgroup>
@@ -340,6 +336,24 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
   var lastHosts = [];
   var lastFiltered = [];
 
+  // Built from whatever account_label values actually appear in the synced
+  // data, not a fixed dev/qa pair — mirrors readiness-page.ts's renderZoneGroups.
+  // Must run before the active-button-restore logic in load() so the buttons
+  // it looks up already exist.
+  function renderEnvFilterButtons(hosts) {
+    var el = document.getElementById("env-filter");
+    var labels = [];
+    hosts.forEach(function (h) {
+      if (h.account_label && labels.indexOf(h.account_label) === -1) labels.push(h.account_label);
+    });
+    labels.sort();
+    var buttons = ['<button data-env="all" type="button">All</button>'];
+    labels.forEach(function (key) {
+      buttons.push('<button data-env="' + escapeHtml(key) + '" type="button">' + escapeHtml(key.toUpperCase()) + '</button>');
+    });
+    el.innerHTML = buttons.join("");
+  }
+
   function renderRows(hosts) {
     var filtered = currentEnvFilter === "all"
       ? hosts
@@ -523,6 +537,7 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
         if (view === "hostnames") {
           lastHosts = data.hosts || [];
           renderLegend();
+          renderEnvFilterButtons(lastHosts);
           var envBtn = document.querySelector('#env-filter button[data-env="' + currentEnvFilter + '"]');
           document.querySelectorAll("#env-filter button").forEach(function (b) { b.classList.remove("active"); });
           if (envBtn) envBtn.classList.add("active");

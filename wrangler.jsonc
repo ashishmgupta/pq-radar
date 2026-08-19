@@ -42,6 +42,10 @@
     }
   ],
   "triggers": {
-    "crons": ["0 * * * *"]
+    // Daily by default — hourly against a real company's full zone set opens
+    // connections to your own origins 24x/day, which can trip monitoring or
+    // read as probing to whoever watches the SIEM. Raise it if you want to,
+    // but tell your own security team before enabling continuous scanning.
+    "crons": ["0 6 * * *"]
   }
 }
