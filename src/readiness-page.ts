@@ -314,19 +314,28 @@ export const READINESS_PAGE_HTML = `<!doctype html>
       : '<div class="stat-tile">' + inner + '</div>';
   }
 
+  // Built from whatever account_label values actually appear in the synced
+  // data, not a fixed dev/qa pair — supports any number of configured
+  // Cloudflare accounts (see env.ts's cfAccounts()) with no UI change needed
+  // when an account is added or removed.
   function renderZoneGroups(hosts) {
     var el = document.getElementById("cf-tiles");
-    var groups = [
-      { key: "dev", label: "DEV \\u2014 X Financial" },
-      { key: "qa",  label: "QA \\u2014 X Financial" }
-    ];
-    el.innerHTML = groups.map(function (g) {
-      var subset = hosts.filter(function (h) { return h.account_label === g.key; });
+    var labels = [];
+    hosts.forEach(function (h) {
+      if (h.account_label && labels.indexOf(h.account_label) === -1) labels.push(h.account_label);
+    });
+    labels.sort();
+    if (!labels.length) {
+      el.innerHTML = '<p class="muted">No accounts configured yet \\u2014 pull zones to populate this.</p>';
+      return;
+    }
+    el.innerHTML = labels.map(function (key) {
+      var subset = hosts.filter(function (h) { return h.account_label === key; });
       var dead = subset.filter(function (h) { return h.edge_outcome === "unreachable"; }).length;
       var live = subset.filter(function (h) {
         return h.edge_outcome === "pq" || h.edge_outcome === "classical" || h.edge_outcome === "downgrade" || h.edge_outcome === "intolerant";
       }).length;
-      return statTileHtml(g.label, subset.length, live, dead, buildUrl("/readiness/detail", { view: "hostnames", env: g.key }));
+      return statTileHtml(key.toUpperCase(), subset.length, live, dead, buildUrl("/readiness/detail", { view: "hostnames", env: key }));
     }).join("");
   }
 
