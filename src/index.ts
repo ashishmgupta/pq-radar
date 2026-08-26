@@ -299,12 +299,18 @@ export default {
     }
 
     if (url.pathname === "/debug/config") {
+      const authError = checkAuth(request, env);
+      if (authError) return authError;
+
       const scanConfig = await env.DB.prepare("SELECT * FROM scan_config WHERE id = 1").first();
       const subnets = await env.DB.prepare("SELECT cidr, sni_hint, label, enabled FROM subnets WHERE enabled = 1").all();
       return Response.json({ scan_config: scanConfig, subnets: subnets.results });
     }
 
     if (url.pathname === "/debug/container-health") {
+      const authError = checkAuth(request, env);
+      if (authError) return authError;
+
       const container = getContainer(env.PROBE_CONTAINER);
       return await container.fetch(new Request("http://localhost/health"));
     }
