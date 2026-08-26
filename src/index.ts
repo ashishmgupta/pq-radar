@@ -85,9 +85,29 @@ class NdjsonToText {
   }
 }
 
-function checkAuth(request: Request, env: Env): Response | null {
-  const authHeader = request.headers.get("Authorization");
-  if (authHeader !== `Bearer ${env.TRIGGER_SECRET}`) {
+/** SHA-256-then-compare rather than a raw byte-for-byte loop: hashing first normalizes
+ *  both inputs to a fixed 32 bytes, so there's no length-based leak to worry about on top
+ *  of the value itself, and the XOR-accumulate loop below never short-circuits. */
+async function timingSafeEqualStr(a: string, b: string): Promise<boolean> {
+  const enc = new TextEncoder();
+  const [digestA, digestB] = await Promise.all([
+    crypto.subtle.digest("SHA-256", enc.encode(a)),
+    crypto.subtle.digest("SHA-256", enc.encode(b)),
+  ]);
+  const bytesA = new Uint8Array(digestA);
+  const bytesB = new Uint8Array(digestB);
+  let diff = 0;
+  for (let i = 0; i < bytesA.length; i++) {
+    diff |= bytesA[i] ^ bytesB[i];
+  }
+  return diff === 0;
+}
+
+async function checkAuth(request: Request, env: Env): Promise<Response | null> {
+  const authHeader = request.headers.get("Authorization") ?? "";
+  const expected = `Bearer ${env.TRIGGER_SECRET}`;
+  const ok = await timingSafeEqualStr(authHeader, expected);
+  if (!ok) {
     return new Response("unauthorized", { status: 401 });
   }
   return null;
@@ -299,7 +319,7 @@ export default {
     }
 
     if (url.pathname === "/debug/config") {
-      const authError = checkAuth(request, env);
+      const authError = await checkAuth(request, env);
       if (authError) return authError;
 
       const scanConfig = await env.DB.prepare("SELECT * FROM scan_config WHERE id = 1").first();
@@ -308,7 +328,7 @@ export default {
     }
 
     if (url.pathname === "/debug/container-health") {
-      const authError = checkAuth(request, env);
+      const authError = await checkAuth(request, env);
       if (authError) return authError;
 
       const container = getContainer(env.PROBE_CONTAINER);
@@ -316,7 +336,7 @@ export default {
     }
 
     if (url.pathname === "/trigger" && request.method === "POST") {
-      const authError = checkAuth(request, env);
+      const authError = await checkAuth(request, env);
       if (authError) return authError;
 
       const scanConfig = await env.DB.prepare(
@@ -397,7 +417,7 @@ export default {
     }
 
     if (url.pathname === "/api/subnets" && request.method === "GET") {
-      const authError = checkAuth(request, env);
+      const authError = await checkAuth(request, env);
       if (authError) return authError;
 
       const subnets = await env.DB.prepare(
@@ -407,7 +427,7 @@ export default {
     }
 
     if (url.pathname === "/api/runs" && request.method === "GET") {
-      const authError = checkAuth(request, env);
+      const authError = await checkAuth(request, env);
       if (authError) return authError;
 
       const subnetIdParam = url.searchParams.get("subnet_id");
@@ -425,7 +445,7 @@ export default {
     }
 
     if (url.pathname === "/api/results" && request.method === "GET") {
-      const authError = checkAuth(request, env);
+      const authError = await checkAuth(request, env);
       if (authError) return authError;
 
       const runId = url.searchParams.get("run_id");
@@ -473,7 +493,7 @@ export default {
     }
 
     if (url.pathname === "/api/results/detail" && request.method === "GET") {
-      const authError = checkAuth(request, env);
+      const authError = await checkAuth(request, env);
       if (authError) return authError;
 
       const runId = url.searchParams.get("run_id");
@@ -495,7 +515,7 @@ export default {
     }
 
     if (url.pathname === "/api/subnets/schedule" && request.method === "PATCH") {
-      const authError = checkAuth(request, env);
+      const authError = await checkAuth(request, env);
       if (authError) return authError;
 
       const body = await request.json<{ id?: number; schedule_enabled?: boolean; schedule_hour_utc?: number | null }>();
@@ -517,7 +537,7 @@ export default {
     // (see cloudflare.ts). Writes only ever land in our own D1 tables, never back to Cloudflare.
     // Loops every configured account (dev, qa, ...) in one call — see env.ts's cfAccounts().
     if (url.pathname === "/api/zones/pull" && request.method === "POST") {
-      const authError = checkAuth(request, env);
+      const authError = await checkAuth(request, env);
       if (authError) return authError;
 
       const now = new Date().toISOString();
@@ -559,7 +579,7 @@ export default {
 
     // Streams live progress the same way /trigger does — see NdjsonToText above.
     if (url.pathname === "/api/zones/scan-edges" && request.method === "POST") {
-      const authError = checkAuth(request, env);
+      const authError = await checkAuth(request, env);
       if (authError) return authError;
 
       const scanConfig = await env.DB.prepare(
@@ -617,7 +637,7 @@ export default {
     // origin IP) but writes to its own leg values ("ssh"/"ftps_implicit"/"ftps_explicit"),
     // never touching the direct_to_origin/client_to_edge data the hosts table relies on.
     if (url.pathname === "/api/zones/scan-ssh" && request.method === "POST") {
-      const authError = checkAuth(request, env);
+      const authError = await checkAuth(request, env);
       if (authError) return authError;
 
       const scanConfig = await env.DB.prepare(
@@ -670,7 +690,7 @@ export default {
     // ?mode=explicit (port 21, plain FTP then AUTH TLS via openssl's -starttls ftp).
     // Reuses the exact same proven TLS/PQ-group probing logic as the origin/edge legs.
     if (url.pathname === "/api/zones/scan-ftps" && request.method === "POST") {
-      const authError = checkAuth(request, env);
+      const authError = await checkAuth(request, env);
       if (authError) return authError;
 
       const scanConfig = await env.DB.prepare(
@@ -724,7 +744,7 @@ export default {
     }
 
     if (url.pathname === "/api/readiness" && request.method === "GET") {
-      const authError = checkAuth(request, env);
+      const authError = await checkAuth(request, env);
       if (authError) return authError;
 
       const allRuns = await fetchAllRuns(env);
@@ -826,7 +846,7 @@ export default {
     // separate query/response from /api/readiness above — removing this endpoint and its
     // UI section has no effect on the hosts table, tiles, or coverage data.
     if (url.pathname === "/api/readiness/services" && request.method === "GET") {
-      const authError = checkAuth(request, env);
+      const authError = await checkAuth(request, env);
       if (authError) return authError;
 
       const allRuns = await fetchAllRuns(env);
