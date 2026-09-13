@@ -77,6 +77,25 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
   }
   .filter-toggle button.active { background: var(--status-good); color: #fff; border-color: var(--status-good); }
 
+  .stat-tiles {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px; margin: 0 0 16px; max-width: 480px;
+  }
+  .stat-tile {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 18px; box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset;
+    cursor: pointer; transition: border-color .12s ease, background .12s ease;
+  }
+  .stat-tile:hover { border-color: var(--text-secondary); }
+  .stat-tile:focus-visible { outline: 2px solid var(--text-secondary); outline-offset: 2px; }
+  .stat-tile.active { border-color: var(--text-primary); background: var(--surface-2); }
+  .stat-tile-label {
+    font-size: 12px; font-weight: 600; color: var(--text-secondary); margin: 0 0 8px;
+  }
+  .stat-tile-total { font-size: 24px; font-weight: 700; color: var(--text-primary); line-height: 1; }
+  .stat-tile-total.good { color: #3fd63f; }
+  .stat-tile-total.critical { color: #ff9a9a; }
+
   .table-wrap { width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
   table { width: 100%; table-layout: fixed; border-collapse: collapse; background: var(--surface-1); font-size: 13px; }
   thead th {
@@ -134,6 +153,7 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
 
       <div id="content" style="display:none">
         <div id="view-hostnames" style="display:none">
+          <div class="stat-tiles" id="host-stat-tiles"></div>
           <div class="legend" id="outcome-legend"></div>
           <div class="filter-toggle" id="env-filter"></div>
           <div class="table-wrap">
@@ -238,6 +258,14 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
     return { cls: "critical", icon: "\\u25BC", label: "None" };
   }
 
+  function isLiveOutcome(outcome) {
+    return outcome === "pq" || outcome === "classical" || outcome === "downgrade" || outcome === "intolerant";
+  }
+
+  function hostLive(h) {
+    return isLiveOutcome(h.edge_outcome) && isLiveOutcome(h.origin_outcome);
+  }
+
   function timeAgo(iso) {
     if (!iso) return null;
     var diffMs = Date.now() - new Date(iso).getTime();
@@ -292,6 +320,7 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
   var cidrParam = qparam("cidr") || "";
   var labelParam = qparam("label") || cidrParam;
   var currentEnvFilter = qparam("env") || "all";
+  var liveFilter = qparam("live") || "live";
 
   // ?redact=1 swaps real hostnames/IPs/zone names for consistent fake ones,
   // purely client-side, for taking clean screenshots. The same real value
@@ -354,12 +383,37 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
     el.innerHTML = buttons.join("");
   }
 
+  function renderStatTiles(hosts) {
+    var total = hosts.length;
+    var liveCount = hosts.filter(hostLive).length;
+    var deadCount = total - liveCount;
+    var tiles = [
+      { filter: "all", label: "Total", value: total, cls: "" },
+      { filter: "live", label: "Live", value: liveCount, cls: "good" },
+      { filter: "dead", label: "Dead", value: deadCount, cls: "critical" },
+    ];
+    var el = document.getElementById("host-stat-tiles");
+    el.innerHTML = tiles.map(function (t) {
+      var active = liveFilter === t.filter;
+      return '<div class="stat-tile' + (active ? " active" : "") + '" data-filter="' + t.filter + '" tabindex="0" role="button" aria-pressed="' + active + '">' +
+        '<div class="stat-tile-label">' + escapeHtml(t.label) + '</div>' +
+        '<div class="stat-tile-total ' + t.cls + '">' + t.value + '</div></div>';
+    }).join("");
+  }
+
   function renderRows(hosts) {
-    var filtered = currentEnvFilter === "all"
+    var envFiltered = currentEnvFilter === "all"
       ? hosts
       : hosts.filter(function (h) { return h.account_label === currentEnvFilter; });
+    renderStatTiles(envFiltered);
+    var filtered = envFiltered;
     if (overallFilter !== "all") {
       filtered = filtered.filter(function (h) { return overall(h).label === overallFilter; });
+    }
+    if (liveFilter === "live") {
+      filtered = filtered.filter(hostLive);
+    } else if (liveFilter === "dead") {
+      filtered = filtered.filter(function (h) { return !hostLive(h); });
     }
     lastFiltered = filtered;
     var el = document.getElementById("rows");
@@ -489,6 +543,25 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
     document.querySelectorAll("#env-filter button").forEach(function (b) { b.classList.remove("active"); });
     btn.classList.add("active");
     renderRows(lastHosts);
+  });
+
+  function toggleLiveFilter(filter) {
+    liveFilter = (liveFilter === filter) ? "all" : filter;
+    renderRows(lastHosts);
+  }
+
+  document.getElementById("host-stat-tiles").addEventListener("click", function (e) {
+    var tile = e.target.closest(".stat-tile[data-filter]");
+    if (!tile) return;
+    toggleLiveFilter(tile.getAttribute("data-filter"));
+  });
+
+  document.getElementById("host-stat-tiles").addEventListener("keydown", function (e) {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    var tile = e.target.closest(".stat-tile[data-filter]");
+    if (!tile) return;
+    e.preventDefault();
+    toggleLiveFilter(tile.getAttribute("data-filter"));
   });
 
   function setTitle() {
