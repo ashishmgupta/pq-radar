@@ -79,8 +79,9 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
 
   .stat-tiles {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    gap: 10px; margin: 0 0 16px; max-width: 480px;
+    gap: 10px; margin: 0 0 16px; max-width: 640px;
   }
+  .stat-tiles.sub-tiles { max-width: 480px; margin: -6px 0 16px; }
   .stat-tile {
     background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
     padding: 16px 18px; box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset;
@@ -94,7 +95,9 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
   }
   .stat-tile-total { font-size: 24px; font-weight: 700; color: var(--text-primary); line-height: 1; }
   .stat-tile-total.good { color: #3fd63f; }
+  .stat-tile-total.warning { color: var(--status-warning); }
   .stat-tile-total.critical { color: #ff9a9a; }
+  .stat-tile-pct { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-left: 6px; }
 
   .table-wrap { width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
   table { width: 100%; table-layout: fixed; border-collapse: collapse; background: var(--surface-1); font-size: 13px; }
@@ -154,6 +157,7 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
       <div id="content" style="display:none">
         <div id="view-hostnames" style="display:none">
           <div class="stat-tiles" id="host-stat-tiles"></div>
+          <div class="stat-tiles sub-tiles" id="live-breakdown-tiles" style="display:none"></div>
           <div class="legend" id="outcome-legend"></div>
           <div class="filter-toggle" id="env-filter"></div>
           <div class="table-wrap">
@@ -258,12 +262,29 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
     return { cls: "critical", icon: "\\u25BC", label: "None" };
   }
 
-  function isLiveOutcome(outcome) {
-    return outcome === "pq" || outcome === "classical" || outcome === "downgrade" || outcome === "intolerant";
+  // "classical" (TLS 1.3, non-PQ group) is deliberately excluded from "live" for the
+  // tiles below and gets its own bucket instead — pq/downgrade/intolerant are the only
+  // outcomes that count as a real leg of live-and-on-the-PQ-track for this page's purposes.
+  function legStatus(outcome) {
+    if (outcome === "pq" || outcome === "downgrade" || outcome === "intolerant") return "live";
+    if (outcome === "classical") return "classical";
+    return "down"; // unreachable, indeterminate, or never scanned
   }
 
-  function hostLive(h) {
-    return isLiveOutcome(h.edge_outcome) && isLiveOutcome(h.origin_outcome);
+  function hostBucket(h) {
+    var edge = legStatus(h.edge_outcome);
+    var origin = legStatus(h.origin_outcome);
+    if (edge === "down" || origin === "down") return "dead";
+    if (edge === "classical" || origin === "classical") return "classical";
+    return "live";
+  }
+
+  function isPqReady(h) {
+    return h.edge_outcome === "pq" && h.origin_outcome === "pq";
+  }
+
+  function isHybrid(h) {
+    return (h.edge_outcome === "pq") !== (h.origin_outcome === "pq");
   }
 
   function timeAgo(iso) {
@@ -321,6 +342,7 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
   var labelParam = qparam("label") || cidrParam;
   var currentEnvFilter = qparam("env") || "all";
   var liveFilter = qparam("live") || "live";
+  var liveSubFilter = qparam("livesub") || "all";
 
   // ?redact=1 swaps real hostnames/IPs/zone names for consistent fake ones,
   // purely client-side, for taking clean screenshots. The same real value
@@ -385,11 +407,13 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
 
   function renderStatTiles(hosts) {
     var total = hosts.length;
-    var liveCount = hosts.filter(hostLive).length;
-    var deadCount = total - liveCount;
+    var liveCount = hosts.filter(function (h) { return hostBucket(h) === "live"; }).length;
+    var classicalCount = hosts.filter(function (h) { return hostBucket(h) === "classical"; }).length;
+    var deadCount = hosts.filter(function (h) { return hostBucket(h) === "dead"; }).length;
     var tiles = [
       { filter: "all", label: "Total", value: total, cls: "" },
       { filter: "live", label: "Live", value: liveCount, cls: "good" },
+      { filter: "classical", label: "Classical", value: classicalCount, cls: "warning" },
       { filter: "dead", label: "Dead", value: deadCount, cls: "critical" },
     ];
     var el = document.getElementById("host-stat-tiles");
@@ -398,6 +422,29 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
       return '<div class="stat-tile' + (active ? " active" : "") + '" data-filter="' + t.filter + '" tabindex="0" role="button" aria-pressed="' + active + '">' +
         '<div class="stat-tile-label">' + escapeHtml(t.label) + '</div>' +
         '<div class="stat-tile-total ' + t.cls + '">' + t.value + '</div></div>';
+    }).join("");
+
+    var liveHosts = hosts.filter(function (h) { return hostBucket(h) === "live"; });
+    var breakdownEl = document.getElementById("live-breakdown-tiles");
+    if (liveFilter !== "live" || total === 0) {
+      breakdownEl.style.display = "none";
+      breakdownEl.innerHTML = "";
+      return;
+    }
+    breakdownEl.style.display = "";
+    var pqReadyCount = liveHosts.filter(isPqReady).length;
+    var hybridCount = liveHosts.filter(isHybrid).length;
+    function pct(n) { return total ? Math.round((n / total) * 100) : 0; }
+    var subTiles = [
+      { filter: "all", label: "Total Live", value: liveCount, pct: pct(liveCount), cls: "good" },
+      { filter: "pq-ready", label: "PQ-Ready", value: pqReadyCount, pct: pct(pqReadyCount), cls: "good" },
+      { filter: "hybrid", label: "Hybrid", value: hybridCount, pct: pct(hybridCount), cls: "warning" },
+    ];
+    breakdownEl.innerHTML = subTiles.map(function (t) {
+      var active = liveSubFilter === t.filter;
+      return '<div class="stat-tile' + (active ? " active" : "") + '" data-subfilter="' + t.filter + '" tabindex="0" role="button" aria-pressed="' + active + '">' +
+        '<div class="stat-tile-label">' + escapeHtml(t.label) + '</div>' +
+        '<div class="stat-tile-total ' + t.cls + '">' + t.value + '<span class="stat-tile-pct">' + t.pct + '%</span></div></div>';
     }).join("");
   }
 
@@ -410,10 +457,13 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
     if (overallFilter !== "all") {
       filtered = filtered.filter(function (h) { return overall(h).label === overallFilter; });
     }
-    if (liveFilter === "live") {
-      filtered = filtered.filter(hostLive);
-    } else if (liveFilter === "dead") {
-      filtered = filtered.filter(function (h) { return !hostLive(h); });
+    if (liveFilter !== "all") {
+      filtered = filtered.filter(function (h) { return hostBucket(h) === liveFilter; });
+      if (liveFilter === "live" && liveSubFilter === "pq-ready") {
+        filtered = filtered.filter(isPqReady);
+      } else if (liveFilter === "live" && liveSubFilter === "hybrid") {
+        filtered = filtered.filter(isHybrid);
+      }
     }
     lastFiltered = filtered;
     var el = document.getElementById("rows");
@@ -547,6 +597,12 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
 
   function toggleLiveFilter(filter) {
     liveFilter = (liveFilter === filter) ? "all" : filter;
+    liveSubFilter = "all";
+    renderRows(lastHosts);
+  }
+
+  function toggleLiveSubFilter(filter) {
+    liveSubFilter = (liveSubFilter === filter) ? "all" : filter;
     renderRows(lastHosts);
   }
 
@@ -562,6 +618,20 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
     if (!tile) return;
     e.preventDefault();
     toggleLiveFilter(tile.getAttribute("data-filter"));
+  });
+
+  document.getElementById("live-breakdown-tiles").addEventListener("click", function (e) {
+    var tile = e.target.closest(".stat-tile[data-subfilter]");
+    if (!tile) return;
+    toggleLiveSubFilter(tile.getAttribute("data-subfilter"));
+  });
+
+  document.getElementById("live-breakdown-tiles").addEventListener("keydown", function (e) {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    var tile = e.target.closest(".stat-tile[data-subfilter]");
+    if (!tile) return;
+    e.preventDefault();
+    toggleLiveSubFilter(tile.getAttribute("data-subfilter"));
   });
 
   function setTitle() {
