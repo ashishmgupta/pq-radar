@@ -191,6 +191,7 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
         <div id="view-subnet-origin" style="display:none">
           <p class="subnet-health-note" id="subnet-health-note"></p>
           <div class="stat-tiles" id="subnet-origin-stat-tiles"></div>
+          <div class="stat-tiles sub-tiles" id="subnet-origin-breakdown-tiles" style="display:none"></div>
           <div class="table-wrap">
             <table>
               <colgroup><col style="width:20%"><col style="width:35%"><col style="width:20%"><col style="width:12.5%"><col style="width:12.5%"></colgroup>
@@ -396,6 +397,7 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
   var lastFiltered = [];
   var lastOriginResults = [];
   var subnetOriginFilter = qparam("originlive") || "live";
+  var subnetOriginSubFilter = qparam("originlivesub") || "all";
 
   // Built from whatever account_label values actually appear in the synced
   // data, not a fixed dev/qa pair — mirrors readiness-page.ts's renderZoneGroups.
@@ -596,6 +598,27 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
         '<div class="stat-tile-label">' + escapeHtml(t.label) + '</div>' +
         '<div class="stat-tile-total ' + t.cls + '">' + t.value + '</div></div>';
     }).join("");
+
+    var breakdownEl = document.getElementById("subnet-origin-breakdown-tiles");
+    if (subnetOriginFilter !== "live" || total === 0) {
+      breakdownEl.style.display = "none";
+      breakdownEl.innerHTML = "";
+      return;
+    }
+    breakdownEl.style.display = "";
+    var pqReadyCount = matched.filter(function (r) { return originBucket(r.outcome) === "live" && r.outcome === "pq"; }).length;
+    var notPqReadyCount = liveCount - pqReadyCount;
+    function pct(n) { return total ? Math.round((n / total) * 100) : 0; }
+    var subTiles = [
+      { filter: "pq-ready", label: "PQ-Ready", value: pqReadyCount, pct: pct(pqReadyCount), cls: "good" },
+      { filter: "not-pq-ready", label: "Not PQ-Ready", value: notPqReadyCount, pct: pct(notPqReadyCount), cls: "warning" },
+    ];
+    breakdownEl.innerHTML = subTiles.map(function (t) {
+      var active = subnetOriginSubFilter === t.filter;
+      return '<div class="stat-tile' + (active ? " active" : "") + '" data-originsubfilter="' + t.filter + '" tabindex="0" role="button" aria-pressed="' + active + '">' +
+        '<div class="stat-tile-label">' + escapeHtml(t.label) + '</div>' +
+        '<div class="stat-tile-total ' + t.cls + '">' + t.value + '<span class="stat-tile-pct">' + t.pct + '%</span></div></div>';
+    }).join("");
   }
 
   function renderSubnetOriginRows(originResults, cidr) {
@@ -604,6 +627,11 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
     renderSubnetOriginStatTiles(matched);
     if (subnetOriginFilter !== "all") {
       matched = matched.filter(function (r) { return originBucket(r.outcome) === subnetOriginFilter; });
+      if (subnetOriginFilter === "live" && subnetOriginSubFilter === "pq-ready") {
+        matched = matched.filter(function (r) { return r.outcome === "pq"; });
+      } else if (subnetOriginFilter === "live" && subnetOriginSubFilter === "not-pq-ready") {
+        matched = matched.filter(function (r) { return r.outcome !== "pq"; });
+      }
     }
     var el = document.getElementById("subnet-origin-rows");
     if (!matched.length) {
@@ -671,6 +699,12 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
 
   function toggleSubnetOriginFilter(filter) {
     subnetOriginFilter = (subnetOriginFilter === filter) ? "all" : filter;
+    subnetOriginSubFilter = "all";
+    renderSubnetOriginRows(lastOriginResults, cidrParam);
+  }
+
+  function toggleSubnetOriginSubFilter(filter) {
+    subnetOriginSubFilter = (subnetOriginSubFilter === filter) ? "all" : filter;
     renderSubnetOriginRows(lastOriginResults, cidrParam);
   }
 
@@ -686,6 +720,20 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
     if (!tile) return;
     e.preventDefault();
     toggleSubnetOriginFilter(tile.getAttribute("data-originfilter"));
+  });
+
+  document.getElementById("subnet-origin-breakdown-tiles").addEventListener("click", function (e) {
+    var tile = e.target.closest(".stat-tile[data-originsubfilter]");
+    if (!tile) return;
+    toggleSubnetOriginSubFilter(tile.getAttribute("data-originsubfilter"));
+  });
+
+  document.getElementById("subnet-origin-breakdown-tiles").addEventListener("keydown", function (e) {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    var tile = e.target.closest(".stat-tile[data-originsubfilter]");
+    if (!tile) return;
+    e.preventDefault();
+    toggleSubnetOriginSubFilter(tile.getAttribute("data-originsubfilter"));
   });
 
   function setTitle() {
