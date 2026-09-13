@@ -190,6 +190,7 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
 
         <div id="view-subnet-origin" style="display:none">
           <p class="subnet-health-note" id="subnet-health-note"></p>
+          <div class="stat-tiles" id="subnet-origin-stat-tiles"></div>
           <div class="table-wrap">
             <table>
               <colgroup><col style="width:20%"><col style="width:35%"><col style="width:20%"><col style="width:12.5%"><col style="width:12.5%"></colgroup>
@@ -285,6 +286,13 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
 
   function isHybrid(h) {
     return (h.edge_outcome === "pq") !== (h.origin_outcome === "pq");
+  }
+
+  // Same live/classical/dead split as hostBucket, but for a single-outcome row (a raw
+  // origin IP has only one leg — no edge/origin pairing to combine).
+  function originBucket(outcome) {
+    var s = legStatus(outcome);
+    return s === "down" ? "dead" : s;
   }
 
   function timeAgo(iso) {
@@ -386,6 +394,8 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
 
   var lastHosts = [];
   var lastFiltered = [];
+  var lastOriginResults = [];
+  var subnetOriginFilter = qparam("originlive") || "live";
 
   // Built from whatever account_label values actually appear in the synced
   // data, not a fixed dev/qa pair — mirrors readiness-page.ts's renderZoneGroups.
@@ -568,8 +578,33 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
     }).join("");
   }
 
+  function renderSubnetOriginStatTiles(matched) {
+    var total = matched.length;
+    var liveCount = matched.filter(function (r) { return originBucket(r.outcome) === "live"; }).length;
+    var classicalCount = matched.filter(function (r) { return originBucket(r.outcome) === "classical"; }).length;
+    var deadCount = matched.filter(function (r) { return originBucket(r.outcome) === "dead"; }).length;
+    var tiles = [
+      { filter: "all", label: "Total", value: total, cls: "" },
+      { filter: "live", label: "Live", value: liveCount, cls: "good" },
+      { filter: "classical", label: "Classical", value: classicalCount, cls: "warning" },
+      { filter: "dead", label: "Dead", value: deadCount, cls: "critical" },
+    ];
+    var el = document.getElementById("subnet-origin-stat-tiles");
+    el.innerHTML = tiles.map(function (t) {
+      var active = subnetOriginFilter === t.filter;
+      return '<div class="stat-tile' + (active ? " active" : "") + '" data-originfilter="' + t.filter + '" tabindex="0" role="button" aria-pressed="' + active + '">' +
+        '<div class="stat-tile-label">' + escapeHtml(t.label) + '</div>' +
+        '<div class="stat-tile-total ' + t.cls + '">' + t.value + '</div></div>';
+    }).join("");
+  }
+
   function renderSubnetOriginRows(originResults, cidr) {
+    lastOriginResults = originResults;
     var matched = originResults.filter(function (r) { return ipInCidr(r.ip, cidr); });
+    renderSubnetOriginStatTiles(matched);
+    if (subnetOriginFilter !== "all") {
+      matched = matched.filter(function (r) { return originBucket(r.outcome) === subnetOriginFilter; });
+    }
     var el = document.getElementById("subnet-origin-rows");
     if (!matched.length) {
       el.innerHTML = '<tr><td colspan="5" class="muted">No origin results yet for this network.</td></tr>';
@@ -632,6 +667,25 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
     if (!tile) return;
     e.preventDefault();
     toggleLiveSubFilter(tile.getAttribute("data-subfilter"));
+  });
+
+  function toggleSubnetOriginFilter(filter) {
+    subnetOriginFilter = (subnetOriginFilter === filter) ? "all" : filter;
+    renderSubnetOriginRows(lastOriginResults, cidrParam);
+  }
+
+  document.getElementById("subnet-origin-stat-tiles").addEventListener("click", function (e) {
+    var tile = e.target.closest(".stat-tile[data-originfilter]");
+    if (!tile) return;
+    toggleSubnetOriginFilter(tile.getAttribute("data-originfilter"));
+  });
+
+  document.getElementById("subnet-origin-stat-tiles").addEventListener("keydown", function (e) {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    var tile = e.target.closest(".stat-tile[data-originfilter]");
+    if (!tile) return;
+    e.preventDefault();
+    toggleSubnetOriginFilter(tile.getAttribute("data-originfilter"));
   });
 
   function setTitle() {
