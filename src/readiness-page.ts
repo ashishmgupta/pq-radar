@@ -172,6 +172,7 @@ export const READINESS_PAGE_HTML = `<!doctype html>
         <button id="pull-btn" type="button">Pull zones from Cloudflare</button>
         <button id="scan-all-btn" type="button">Run full scan (CIDR + edges)</button>
         <button id="refresh-btn" type="button">Refresh</button>
+        <button id="export-btn" type="button">Export to HTML</button>
         <span class="status" id="toolbar-status"></span>
       </div>
 
@@ -563,6 +564,42 @@ export const READINESS_PAGE_HTML = `<!doctype html>
   });
 
   document.getElementById("refresh-btn").addEventListener("click", loadReadiness);
+
+  document.getElementById("export-btn").addEventListener("click", function () {
+    var btn = document.getElementById("export-btn");
+    var status = document.getElementById("toolbar-status");
+    btn.disabled = true;
+    status.textContent = "Exporting…";
+    fetch("/export/readiness.html", { headers: authHeaders() })
+      .then(function (res) {
+        if (res.status === 401) {
+          clearSecret();
+          showGate("Invalid secret.");
+          return null;
+        }
+        if (!res.ok) throw new Error("export failed: " + res.status);
+        return res.blob();
+      })
+      .then(function (blob) {
+        if (!blob) return;
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        var stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+        a.href = url;
+        a.download = "pq-radar-readiness-" + stamp + ".html";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        status.textContent = "Export downloaded";
+      })
+      .catch(function (err) {
+        status.textContent = "Export failed: " + err.message;
+      })
+      .finally(function () {
+        btn.disabled = false;
+      });
+  });
 
   function showGate(errorMsg) {
     app.style.display = "none";
