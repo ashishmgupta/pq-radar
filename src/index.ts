@@ -4,6 +4,7 @@ import { SCHEDULE_PAGE_HTML } from "./schedule-page";
 import { READINESS_PAGE_HTML } from "./readiness-page";
 import { READINESS_DETAIL_PAGE_HTML } from "./readiness-detail-page";
 import { READINESS_SERVICES_PAGE_HTML } from "./readiness-services-page";
+import { renderExportHtml } from "./export-page";
 import { Env, ProbeContainer, cfAccounts } from "./env";
 import { handleScheduled } from "./cron";
 import { listZones, listDnsRecords } from "./cloudflare";
@@ -263,6 +264,170 @@ function buildLegHealth(
   });
 
   return { ...global, subnets: perSubnet };
+}
+
+// Shared by GET /api/readiness and GET /export/readiness.html — the export just
+// renders the same data as a standalone page instead of returning it as JSON.
+async function buildReadinessData(env: Env) {
+  const allRuns = await fetchAllRuns(env);
+  const successfulRuns = allRuns.filter((r) => r.status === "success");
+  const enabledSubnets = await env.DB.prepare("SELECT id, cidr, label FROM subnets WHERE enabled = 1 ORDER BY id").all<EnabledSubnet>();
+
+  const resolvedEdge = resolveLatestLegRuns(successfulRuns, "client_to_edge");
+  const resolvedOrigin = resolveLatestLegRuns(successfulRuns, "direct_to_origin");
+  const edgeMap = await fetchLatestSimpleLeg(env, "client_to_edge", resolvedEdge);
+  const originMap = await fetchLatestOrigin(env, resolvedOrigin, enabledSubnets.results);
+
+  const dnsRows = await env.DB.prepare(
+    `SELECT d.hostname, d.origin_content AS origin_ip, z.zone_name, z.account_label
+     FROM dns_records d LEFT JOIN zones z ON z.zone_id = d.zone_id
+     ORDER BY d.hostname`
+  ).all<{ hostname: string; origin_ip: string | null; zone_name: string | null; account_label: string | null }>();
+
+  const hosts = dnsRows.results.map((d) => {
+    const edge = edgeMap.get(d.hostname);
+    const origin = d.origin_ip ? originMap.get(d.origin_ip) : undefined;
+    return {
+      hostname: d.hostname,
+      zone_name: d.zone_name,
+      account_label: d.account_label,
+      origin_ip: d.origin_ip,
+      edge_outcome: edge?.outcome ?? null,
+      edge_protocol: edge?.protocol ?? null,
+      edge_group: edge?.negotiated_group ?? null,
+      edge_run_id: edge?.run_id ?? null,
+      origin_outcome: origin?.outcome ?? null,
+      origin_protocol: origin?.protocol ?? null,
+      origin_group: origin?.negotiated_group ?? null,
+      origin_run_id: origin?.run_id ?? null,
+    };
+  });
+
+  // Live origins we scanned directly that no DNS record (from any account) points at —
+  // real infrastructure with no known Cloudflare zone covering it. Excludes both
+  // "unreachable" (dead) and "indeterminate" (inconclusive) — neither is a confirmed
+  // live, uncovered origin.
+  const knownOriginIps = new Set(dnsRows.results.map((d) => d.origin_ip));
+  const originEntries = Array.from(originMap.values());
+  const liveOrigins = originEntries.filter((r) => isLiveOutcome(r.outcome));
+  const orphans = liveOrigins
+    .filter((r) => !knownOriginIps.has(r.ip))
+    .sort((a, b) => (a.ip < b.ip ? -1 : a.ip > b.ip ? 1 : 0))
+    .map((r) => ({ ip: r.ip, outcome: r.outcome, protocol: r.protocol, negotiated_group: r.negotiated_group }));
+
+  // Per-subnet tile stats: how many addresses in each enabled CIDR have a
+  // direct_to_origin result, and how many of those are confirmed live. "dead" stays
+  // strictly "unreachable" (not "everything non-live") — an indeterminate result is
+  // neither, so live + dead can be less than total; that gap is real and intentional.
+  const originSubnets = enabledSubnets.results.map((s) => {
+    const matched = originEntries.filter((r) => ipInCidr(r.ip, s.cidr));
+    const live = matched.filter((r) => isLiveOutcome(r.outcome)).length;
+    const dead = matched.filter((r) => r.outcome === "unreachable").length;
+    return { cidr: s.cidr, label: s.label, total: matched.length, live, dead };
+  });
+
+  // Flat per-IP origin results, each annotated with any hostname(s) that point at it —
+  // the whole picture for a subnet (unlike `hosts`, which is hostname-keyed and misses
+  // every address with no DNS record at all). Powers the readiness page's per-subnet
+  // drill-down; the frontend filters this list by CIDR client-side.
+  const originIpToHostnames = new Map<string, string[]>();
+  for (const d of dnsRows.results) {
+    const list = originIpToHostnames.get(d.origin_ip) ?? [];
+    list.push(d.hostname);
+    originIpToHostnames.set(d.origin_ip, list);
+  }
+  const originResults = originEntries
+    .map((r) => ({
+      ip: r.ip,
+      hostnames: originIpToHostnames.get(r.ip)?.join(", ") ?? null,
+      outcome: r.outcome,
+      protocol: r.protocol,
+      negotiated_group: r.negotiated_group,
+    }))
+    .sort((a, b) => (a.ip < b.ip ? -1 : a.ip > b.ip ? 1 : 0));
+
+  return {
+    hosts,
+    orphans,
+    origin_results: originResults,
+    coverage: {
+      total_live_origins: liveOrigins.length,
+      covered: liveOrigins.length - orphans.length,
+      uncovered: orphans.length,
+    },
+    origin_subnets: originSubnets,
+    run_health: {
+      client_to_edge: buildLegHealth(allRuns, resolvedEdge, "client_to_edge", []),
+      direct_to_origin: buildLegHealth(allRuns, resolvedOrigin, "direct_to_origin", enabledSubnets.results),
+    },
+  };
+}
+
+// Shared by GET /api/readiness/services and GET /export/readiness.html.
+async function buildServicesData(env: Env) {
+  const allRuns = await fetchAllRuns(env);
+  const successfulRuns = allRuns.filter((r) => r.status === "success");
+  const enabledSubnets = await env.DB.prepare("SELECT id, cidr, label FROM subnets WHERE enabled = 1 ORDER BY id").all<EnabledSubnet>();
+
+  const resolvedSsh = resolveLatestLegRuns(successfulRuns, "ssh");
+  const resolvedFtpsImplicit = resolveLatestLegRuns(successfulRuns, "ftps_implicit");
+  const resolvedFtpsExplicit = resolveLatestLegRuns(successfulRuns, "ftps_explicit");
+  const sshMap = await fetchLatestSimpleLeg(env, "ssh", resolvedSsh);
+  const ftpsImplicitMap = await fetchLatestSimpleLeg(env, "ftps_implicit", resolvedFtpsImplicit);
+  const ftpsExplicitMap = await fetchLatestSimpleLeg(env, "ftps_explicit", resolvedFtpsExplicit);
+
+  const originIps = new Set<string>();
+  const dnsOriginIps = await env.DB.prepare("SELECT DISTINCT origin_content FROM dns_records WHERE origin_content IS NOT NULL").all<{ origin_content: string }>();
+  for (const r of dnsOriginIps.results) originIps.add(r.origin_content);
+  for (const ip of sshMap.keys()) originIps.add(ip);
+  for (const ip of ftpsImplicitMap.keys()) originIps.add(ip);
+  for (const ip of ftpsExplicitMap.keys()) originIps.add(ip);
+
+  const origins = Array.from(originIps)
+    .sort()
+    .map((ip) => {
+      const ssh = sshMap.get(ip);
+      const fi = ftpsImplicitMap.get(ip);
+      const fe = ftpsExplicitMap.get(ip);
+      return {
+        ip,
+        ssh_outcome: ssh?.outcome ?? null,
+        ssh_banner: ssh?.protocol ?? null,
+        ssh_kex: ssh?.negotiated_group ?? null,
+        ssh_run_id: ssh?.run_id ?? null,
+        ftps_implicit_outcome: fi?.outcome ?? null,
+        ftps_implicit_protocol: fi?.protocol ?? null,
+        ftps_implicit_group: fi?.negotiated_group ?? null,
+        ftps_implicit_run_id: fi?.run_id ?? null,
+        ftps_explicit_outcome: fe?.outcome ?? null,
+        ftps_explicit_protocol: fe?.protocol ?? null,
+        ftps_explicit_group: fe?.negotiated_group ?? null,
+        ftps_explicit_run_id: fe?.run_id ?? null,
+      };
+    });
+
+  // Per-subnet tile stats for the SSH/FTPS section, mirroring origin_subnets above.
+  const serviceSubnets = enabledSubnets.results.map((s) => {
+    const sshIn = Array.from(sshMap.values()).filter((r) => ipInCidr(r.ip, s.cidr));
+    const fiIn = Array.from(ftpsImplicitMap.values()).filter((r) => ipInCidr(r.ip, s.cidr));
+    const feIn = Array.from(ftpsExplicitMap.values()).filter((r) => ipInCidr(r.ip, s.cidr));
+    const total = new Set([...sshIn, ...fiIn, ...feIn].map((r) => r.ip)).size;
+    const sshLive = new Set(sshIn.filter((r) => isLiveOutcome(r.outcome)).map((r) => r.ip)).size;
+    const ftpsLive = new Set(
+      [...fiIn, ...feIn].filter((r) => isLiveOutcome(r.outcome)).map((r) => r.ip)
+    ).size;
+    return { cidr: s.cidr, label: s.label, total, ssh_live: sshLive, ftps_live: ftpsLive };
+  });
+
+  return {
+    origins,
+    subnets: serviceSubnets,
+    run_health: {
+      ssh: buildLegHealth(allRuns, resolvedSsh, "ssh", []),
+      ftps_implicit: buildLegHealth(allRuns, resolvedFtpsImplicit, "ftps_implicit", []),
+      ftps_explicit: buildLegHealth(allRuns, resolvedFtpsExplicit, "ftps_explicit", []),
+    },
+  };
 }
 
 export default {
@@ -747,98 +912,7 @@ export default {
       const authError = await checkAuth(request, env);
       if (authError) return authError;
 
-      const allRuns = await fetchAllRuns(env);
-      const successfulRuns = allRuns.filter((r) => r.status === "success");
-      const enabledSubnets = await env.DB.prepare("SELECT id, cidr, label FROM subnets WHERE enabled = 1 ORDER BY id").all<EnabledSubnet>();
-
-      const resolvedEdge = resolveLatestLegRuns(successfulRuns, "client_to_edge");
-      const resolvedOrigin = resolveLatestLegRuns(successfulRuns, "direct_to_origin");
-      const edgeMap = await fetchLatestSimpleLeg(env, "client_to_edge", resolvedEdge);
-      const originMap = await fetchLatestOrigin(env, resolvedOrigin, enabledSubnets.results);
-
-      const dnsRows = await env.DB.prepare(
-        `SELECT d.hostname, d.origin_content AS origin_ip, z.zone_name, z.account_label
-         FROM dns_records d LEFT JOIN zones z ON z.zone_id = d.zone_id
-         ORDER BY d.hostname`
-      ).all<{ hostname: string; origin_ip: string | null; zone_name: string | null; account_label: string | null }>();
-
-      const hosts = dnsRows.results.map((d) => {
-        const edge = edgeMap.get(d.hostname);
-        const origin = d.origin_ip ? originMap.get(d.origin_ip) : undefined;
-        return {
-          hostname: d.hostname,
-          zone_name: d.zone_name,
-          account_label: d.account_label,
-          origin_ip: d.origin_ip,
-          edge_outcome: edge?.outcome ?? null,
-          edge_protocol: edge?.protocol ?? null,
-          edge_group: edge?.negotiated_group ?? null,
-          edge_run_id: edge?.run_id ?? null,
-          origin_outcome: origin?.outcome ?? null,
-          origin_protocol: origin?.protocol ?? null,
-          origin_group: origin?.negotiated_group ?? null,
-          origin_run_id: origin?.run_id ?? null,
-        };
-      });
-
-      // Live origins we scanned directly that no DNS record (from any account) points at —
-      // real infrastructure with no known Cloudflare zone covering it. Excludes both
-      // "unreachable" (dead) and "indeterminate" (inconclusive) — neither is a confirmed
-      // live, uncovered origin.
-      const knownOriginIps = new Set(dnsRows.results.map((d) => d.origin_ip));
-      const originEntries = Array.from(originMap.values());
-      const liveOrigins = originEntries.filter((r) => isLiveOutcome(r.outcome));
-      const orphans = liveOrigins
-        .filter((r) => !knownOriginIps.has(r.ip))
-        .sort((a, b) => (a.ip < b.ip ? -1 : a.ip > b.ip ? 1 : 0))
-        .map((r) => ({ ip: r.ip, outcome: r.outcome, protocol: r.protocol, negotiated_group: r.negotiated_group }));
-
-      // Per-subnet tile stats: how many addresses in each enabled CIDR have a
-      // direct_to_origin result, and how many of those are confirmed live. "dead" stays
-      // strictly "unreachable" (not "everything non-live") — an indeterminate result is
-      // neither, so live + dead can be less than total; that gap is real and intentional.
-      const originSubnets = enabledSubnets.results.map((s) => {
-        const matched = originEntries.filter((r) => ipInCidr(r.ip, s.cidr));
-        const live = matched.filter((r) => isLiveOutcome(r.outcome)).length;
-        const dead = matched.filter((r) => r.outcome === "unreachable").length;
-        return { cidr: s.cidr, label: s.label, total: matched.length, live, dead };
-      });
-
-      // Flat per-IP origin results, each annotated with any hostname(s) that point at it —
-      // the whole picture for a subnet (unlike `hosts`, which is hostname-keyed and misses
-      // every address with no DNS record at all). Powers the readiness page's per-subnet
-      // drill-down; the frontend filters this list by CIDR client-side.
-      const originIpToHostnames = new Map<string, string[]>();
-      for (const d of dnsRows.results) {
-        const list = originIpToHostnames.get(d.origin_ip) ?? [];
-        list.push(d.hostname);
-        originIpToHostnames.set(d.origin_ip, list);
-      }
-      const originResults = originEntries
-        .map((r) => ({
-          ip: r.ip,
-          hostnames: originIpToHostnames.get(r.ip)?.join(", ") ?? null,
-          outcome: r.outcome,
-          protocol: r.protocol,
-          negotiated_group: r.negotiated_group,
-        }))
-        .sort((a, b) => (a.ip < b.ip ? -1 : a.ip > b.ip ? 1 : 0));
-
-      return Response.json({
-        hosts,
-        orphans,
-        origin_results: originResults,
-        coverage: {
-          total_live_origins: liveOrigins.length,
-          covered: liveOrigins.length - orphans.length,
-          uncovered: orphans.length,
-        },
-        origin_subnets: originSubnets,
-        run_health: {
-          client_to_edge: buildLegHealth(allRuns, resolvedEdge, "client_to_edge", []),
-          direct_to_origin: buildLegHealth(allRuns, resolvedOrigin, "direct_to_origin", enabledSubnets.results),
-        },
-      });
+      return Response.json(await buildReadinessData(env));
     }
 
     // SSH/FTPS results, keyed by origin IP (not hostname — these aren't Cloudflare-fronted,
@@ -849,67 +923,22 @@ export default {
       const authError = await checkAuth(request, env);
       if (authError) return authError;
 
-      const allRuns = await fetchAllRuns(env);
-      const successfulRuns = allRuns.filter((r) => r.status === "success");
-      const enabledSubnets = await env.DB.prepare("SELECT id, cidr, label FROM subnets WHERE enabled = 1 ORDER BY id").all<EnabledSubnet>();
+      return Response.json(await buildServicesData(env));
+    }
 
-      const resolvedSsh = resolveLatestLegRuns(successfulRuns, "ssh");
-      const resolvedFtpsImplicit = resolveLatestLegRuns(successfulRuns, "ftps_implicit");
-      const resolvedFtpsExplicit = resolveLatestLegRuns(successfulRuns, "ftps_explicit");
-      const sshMap = await fetchLatestSimpleLeg(env, "ssh", resolvedSsh);
-      const ftpsImplicitMap = await fetchLatestSimpleLeg(env, "ftps_implicit", resolvedFtpsImplicit);
-      const ftpsExplicitMap = await fetchLatestSimpleLeg(env, "ftps_explicit", resolvedFtpsExplicit);
+    // A single self-contained HTML file with the current readiness + services data
+    // embedded inline (no fetch calls) — same filters/tiles as the live dashboard, but
+    // meant to be downloaded and opened by someone without a TRIGGER_SECRET.
+    if (url.pathname === "/export/readiness.html" && request.method === "GET") {
+      const authError = await checkAuth(request, env);
+      if (authError) return authError;
 
-      const originIps = new Set<string>();
-      const dnsOriginIps = await env.DB.prepare("SELECT DISTINCT origin_content FROM dns_records WHERE origin_content IS NOT NULL").all<{ origin_content: string }>();
-      for (const r of dnsOriginIps.results) originIps.add(r.origin_content);
-      for (const ip of sshMap.keys()) originIps.add(ip);
-      for (const ip of ftpsImplicitMap.keys()) originIps.add(ip);
-      for (const ip of ftpsExplicitMap.keys()) originIps.add(ip);
-
-      const origins = Array.from(originIps)
-        .sort()
-        .map((ip) => {
-          const ssh = sshMap.get(ip);
-          const fi = ftpsImplicitMap.get(ip);
-          const fe = ftpsExplicitMap.get(ip);
-          return {
-            ip,
-            ssh_outcome: ssh?.outcome ?? null,
-            ssh_banner: ssh?.protocol ?? null,
-            ssh_kex: ssh?.negotiated_group ?? null,
-            ssh_run_id: ssh?.run_id ?? null,
-            ftps_implicit_outcome: fi?.outcome ?? null,
-            ftps_implicit_protocol: fi?.protocol ?? null,
-            ftps_implicit_group: fi?.negotiated_group ?? null,
-            ftps_implicit_run_id: fi?.run_id ?? null,
-            ftps_explicit_outcome: fe?.outcome ?? null,
-            ftps_explicit_protocol: fe?.protocol ?? null,
-            ftps_explicit_group: fe?.negotiated_group ?? null,
-            ftps_explicit_run_id: fe?.run_id ?? null,
-          };
-        });
-
-      // Per-subnet tile stats for the SSH/FTPS section, mirroring origin_subnets above.
-      const serviceSubnets = enabledSubnets.results.map((s) => {
-        const sshIn = Array.from(sshMap.values()).filter((r) => ipInCidr(r.ip, s.cidr));
-        const fiIn = Array.from(ftpsImplicitMap.values()).filter((r) => ipInCidr(r.ip, s.cidr));
-        const feIn = Array.from(ftpsExplicitMap.values()).filter((r) => ipInCidr(r.ip, s.cidr));
-        const total = new Set([...sshIn, ...fiIn, ...feIn].map((r) => r.ip)).size;
-        const sshLive = new Set(sshIn.filter((r) => isLiveOutcome(r.outcome)).map((r) => r.ip)).size;
-        const ftpsLive = new Set(
-          [...fiIn, ...feIn].filter((r) => isLiveOutcome(r.outcome)).map((r) => r.ip)
-        ).size;
-        return { cidr: s.cidr, label: s.label, total, ssh_live: sshLive, ftps_live: ftpsLive };
-      });
-
-      return Response.json({
-        origins,
-        subnets: serviceSubnets,
-        run_health: {
-          ssh: buildLegHealth(allRuns, resolvedSsh, "ssh", []),
-          ftps_implicit: buildLegHealth(allRuns, resolvedFtpsImplicit, "ftps_implicit", []),
-          ftps_explicit: buildLegHealth(allRuns, resolvedFtpsExplicit, "ftps_explicit", []),
+      const [readiness, services] = await Promise.all([buildReadinessData(env), buildServicesData(env)]);
+      const html = renderExportHtml({ readiness, services, generatedAt: new Date().toISOString() });
+      return new Response(html, {
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "no-store",
         },
       });
     }
