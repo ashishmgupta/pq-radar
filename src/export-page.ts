@@ -73,6 +73,28 @@ export function renderExportHtml(data: ExportData): string {
   .stat-tile-total.critical { color: #ff9a9a; }
   .stat-tile-pct { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-left: 6px; }
 
+  #network-subtiles {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 10px; margin: 0 0 24px; max-width: 900px;
+  }
+  .network-subtile {
+    display: block; text-decoration: none; color: inherit;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 18px; box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset;
+    transition: border-color .12s ease;
+  }
+  .network-subtile:hover { border-color: var(--text-secondary); }
+  .network-subtile .stat-tile-label { margin-bottom: 8px; }
+  .network-subtile .stat-tile-total { font-size: 30px; margin-bottom: 10px; letter-spacing: -0.02em; }
+  .stat-tile-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .stat-chip {
+    font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .stat-chip.good     { background: rgba(12,163,12,0.16);   color: #3fd63f; }
+  .stat-chip.critical { background: rgba(230,103,103,0.16); color: #ff9a9a; }
+  .stat-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; display: inline-block; }
+
   .filter-toggle { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 16px; }
   .filter-toggle button {
     background: var(--surface-1); border: 1px solid var(--border); color: var(--text-secondary);
@@ -115,7 +137,7 @@ export function renderExportHtml(data: ExportData): string {
     <p class="subtitle">End-to-end readiness: Client to Edge and Origin (Direct), plus SSH/FTPS and origin coverage.</p>
     <p class="generated-note" id="generated-note"></p>
 
-    <h2 class="section-title">All Hostnames</h2>
+    <h2 class="section-title">Domains</h2>
     <div class="filter-toggle" id="env-filter"></div>
     <div class="stat-tiles" id="host-stat-tiles"></div>
     <div class="stat-tiles sub-tiles" id="live-breakdown-tiles" style="display:none"></div>
@@ -130,10 +152,11 @@ export function renderExportHtml(data: ExportData): string {
       </table>
     </div>
 
-    <h2 class="section-title">Origin Networks</h2>
+    <h2 class="section-title">Networks</h2>
+    <div class="stat-tiles" id="network-subtiles"></div>
     <div id="origin-networks"></div>
 
-    <h2 class="section-title">Uncovered Origins</h2>
+    <h3 class="subnet-title">Uncovered Origins</h3>
     <p class="subtitle" style="margin-bottom:16px;">Live origins scanned directly that no DNS record points at — real infrastructure with no known Cloudflare zone covering it.</p>
     <div class="table-wrap">
       <table>
@@ -143,7 +166,7 @@ export function renderExportHtml(data: ExportData): string {
       </table>
     </div>
 
-    <h2 class="section-title">SSH &amp; FTPS Services</h2>
+    <h3 class="subnet-title">SSH &amp; FTPS Services</h3>
     <div class="stat-tiles" id="services-stat-tiles"></div>
     <div class="table-wrap">
       <table>
@@ -368,6 +391,28 @@ export function renderExportHtml(data: ExportData): string {
   var subnetState = {};
   originSubnets.forEach(function (s) { subnetState[s.cidr] = { top: "live", sub: "all" }; });
 
+  function subnetAnchorId(cidr) { return "subnet-" + cidr.replace(/[.\/]/g, "-"); }
+
+  // One small tile per CIDR (total / live / dead), linking down to that network's full
+  // detail block below \\u2014 a quick-glance row across every configured subnet.
+  function renderNetworkSubtiles() {
+    var el = document.getElementById("network-subtiles");
+    if (!originSubnets.length) {
+      el.innerHTML = '<p class="empty-note">No enabled subnets configured.</p>';
+      return;
+    }
+    el.innerHTML = originSubnets.map(function (s) {
+      var label = s.cidr + (s.label ? " \\u2014 " + s.label : "");
+      return '<a class="network-subtile" href="#' + subnetAnchorId(s.cidr) + '">' +
+        '<div class="stat-tile-label">' + escapeHtml(label) + '</div>' +
+        '<div class="stat-tile-total">' + s.total + '</div>' +
+        '<div class="stat-tile-row">' +
+          '<span class="stat-chip good"><span class="dot"></span>' + s.live + ' live</span>' +
+          '<span class="stat-chip critical"><span class="dot"></span>' + s.dead + ' dead</span>' +
+        '</div></a>';
+    }).join("");
+  }
+
   function renderOriginNetworks() {
     var container = document.getElementById("origin-networks");
     if (!originSubnets.length) {
@@ -417,7 +462,7 @@ export function renderExportHtml(data: ExportData): string {
           }).join("")
         : '<tr><td colspan="5" class="muted">No origin results for this network match this filter.</td></tr>';
 
-      return '<div class="subnet-block" data-cidr="' + escapeHtml(s.cidr) + '">' +
+      return '<div class="subnet-block" id="' + subnetAnchorId(s.cidr) + '" data-cidr="' + escapeHtml(s.cidr) + '">' +
         '<h3 class="subnet-title">' + escapeHtml(s.cidr + (s.label ? " \\u2014 " + s.label : "")) + '</h3>' +
         '<div class="stat-tiles" data-cidr="' + escapeHtml(s.cidr) + '">' + tilesHtml + '</div>' +
         breakdownHtml +
@@ -510,6 +555,7 @@ export function renderExportHtml(data: ExportData): string {
   renderLegend();
   renderEnvButtons();
   renderHostnames();
+  renderNetworkSubtiles();
   renderOriginNetworks();
   renderOrphans();
   renderServices();
