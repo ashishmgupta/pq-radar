@@ -50,6 +50,17 @@ export function renderExportHtml(data: ExportData): string {
     border-top: 1px solid var(--border);
   }
   h2.section-title:first-of-type { border-top: none; padding-top: 0; margin-top: 8px; }
+  .top-nav {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; gap: 8px; margin: 0 0 24px; padding: 10px 0;
+    background: #0d0d0d; border-bottom: 1px solid var(--border);
+  }
+  .top-nav a {
+    background: var(--surface-1); border: 1px solid var(--border); color: var(--text-primary);
+    border-radius: 999px; padding: 7px 16px; font-size: 13px; font-weight: 600;
+    text-decoration: none; transition: border-color .12s ease;
+  }
+  .top-nav a:hover { border-color: var(--text-secondary); }
   h3.subnet-title { font-size: 14px; font-weight: 700; margin: 24px 0 10px; color: var(--text-secondary); }
   h3.subnet-title:first-child { margin-top: 0; }
 
@@ -137,7 +148,12 @@ export function renderExportHtml(data: ExportData): string {
     <p class="subtitle">End-to-end readiness: Client to Edge and Origin (Direct), plus SSH/FTPS and origin coverage.</p>
     <p class="generated-note" id="generated-note"></p>
 
-    <h2 class="section-title">Domains</h2>
+    <nav class="top-nav">
+      <a href="#domains-section">Domains</a>
+      <a href="#networks-section">Networks</a>
+    </nav>
+
+    <h2 class="section-title" id="domains-section">Domains</h2>
     <div class="filter-toggle" id="env-filter"></div>
     <div class="stat-tiles" id="host-stat-tiles"></div>
     <div class="stat-tiles sub-tiles" id="live-breakdown-tiles" style="display:none"></div>
@@ -152,7 +168,7 @@ export function renderExportHtml(data: ExportData): string {
       </table>
     </div>
 
-    <h2 class="section-title">Networks</h2>
+    <h2 class="section-title" id="networks-section">Networks</h2>
     <div class="stat-tiles" id="network-subtiles"></div>
     <div id="origin-networks"></div>
 
