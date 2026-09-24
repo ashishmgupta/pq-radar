@@ -342,14 +342,19 @@ export function renderExportHtml(data: ExportData): string {
   // env filter and live/classical/dead filter used by the interactive tiles below.
   function renderOverviewDomainsTiles() {
     var total = hosts.length;
-    var liveCount = hosts.filter(function (h) { return hostBucket(h) === "live"; }).length;
+    var liveHosts = hosts.filter(function (h) { return hostBucket(h) === "live"; });
+    var liveCount = liveHosts.length;
     var classicalCount = hosts.filter(function (h) { return hostBucket(h) === "classical"; }).length;
     var deadCount = hosts.filter(function (h) { return hostBucket(h) === "dead"; }).length;
+    var pqReadyCount = liveHosts.filter(isPqReady).length;
+    var hybridCount = liveHosts.filter(isHybrid).length;
     document.getElementById("overview-domains-tiles").innerHTML =
       staticTileHtml("Total", total, "") +
       staticTileHtml("Live", liveCount, "good") +
       staticTileHtml("Classical", classicalCount, "warning") +
-      staticTileHtml("Dead", deadCount, "critical");
+      staticTileHtml("Dead", deadCount, "critical") +
+      staticTileHtml("PQ-Ready", pqReadyCount, "good") +
+      staticTileHtml("Hybrid", hybridCount, "warning");
   }
 
   function renderEnvButtons() {
@@ -454,11 +459,15 @@ export function renderExportHtml(data: ExportData): string {
     }
     el.innerHTML = originSubnets.map(function (s) {
       var label = s.cidr + (s.label ? " \\u2014 " + s.label : "");
+      var pqReadyCount = originResults.filter(function (r) {
+        return ipInCidr(r.ip, s.cidr) && originBucket(r.outcome) === "live" && r.outcome === "pq";
+      }).length;
       return '<a class="network-subtile" href="#' + subnetAnchorId(s.cidr) + '">' +
         '<div class="stat-tile-label">' + escapeHtml(label) + '</div>' +
         '<div class="stat-tile-total">' + s.total + '</div>' +
         '<div class="stat-tile-row">' +
           '<span class="stat-chip good"><span class="dot"></span>' + s.live + ' live</span>' +
+          '<span class="stat-chip good"><span class="dot"></span>' + pqReadyCount + ' pq-ready</span>' +
           '<span class="stat-chip critical"><span class="dot"></span>' + s.dead + ' dead</span>' +
         '</div></a>';
     }).join("");
