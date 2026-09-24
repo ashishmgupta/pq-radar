@@ -50,17 +50,25 @@ export function renderExportHtml(data: ExportData): string {
     border-top: 1px solid var(--border);
   }
   h2.section-title:first-of-type { border-top: none; padding-top: 0; margin-top: 8px; }
-  .top-nav {
-    position: sticky; top: 0; z-index: 10;
-    display: flex; gap: 8px; margin: 0 0 24px; padding: 10px 0;
-    background: #0d0d0d; border-bottom: 1px solid var(--border);
+  .overview-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px; margin: 8px 0 32px;
   }
-  .top-nav a {
-    background: var(--surface-1); border: 1px solid var(--border); color: var(--text-primary);
-    border-radius: 999px; padding: 7px 16px; font-size: 13px; font-weight: 600;
-    text-decoration: none; transition: border-color .12s ease;
+  .overview-panel {
+    background: linear-gradient(165deg, var(--surface-1), var(--surface-2));
+    border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px;
   }
-  .top-nav a:hover { border-color: var(--text-secondary); }
+  .overview-panel-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-muted); margin: 0 0 14px; display: flex; align-items: center;
+  }
+  .overview-panel-title a {
+    margin-left: auto; font-size: 11px; font-weight: 600; text-transform: none; letter-spacing: 0;
+    color: var(--text-secondary); text-decoration: none;
+  }
+  .overview-panel-title a:hover { color: var(--text-primary); text-decoration: underline; }
+  .stat-tile.static { cursor: default; }
+  .stat-tile.static:hover { border-color: var(--border); }
   h3.subnet-title { font-size: 14px; font-weight: 700; margin: 24px 0 10px; color: var(--text-secondary); }
   h3.subnet-title:first-child { margin-top: 0; }
 
@@ -148,10 +156,16 @@ export function renderExportHtml(data: ExportData): string {
     <p class="subtitle">End-to-end readiness: Client to Edge and Origin (Direct), plus SSH/FTPS and origin coverage.</p>
     <p class="generated-note" id="generated-note"></p>
 
-    <nav class="top-nav">
-      <a href="#domains-section">Domains</a>
-      <a href="#networks-section">Networks</a>
-    </nav>
+    <div class="overview-grid">
+      <div class="overview-panel">
+        <p class="overview-panel-title">Domains <a href="#domains-section">View all &rarr;</a></p>
+        <div class="stat-tiles" id="overview-domains-tiles"></div>
+      </div>
+      <div class="overview-panel">
+        <p class="overview-panel-title">Networks <a href="#networks-section">View all &rarr;</a></p>
+        <div class="stat-tiles" id="network-subtiles"></div>
+      </div>
+    </div>
 
     <h2 class="section-title" id="domains-section">Domains</h2>
     <div class="filter-toggle" id="env-filter"></div>
@@ -169,7 +183,6 @@ export function renderExportHtml(data: ExportData): string {
     </div>
 
     <h2 class="section-title" id="networks-section">Networks</h2>
-    <div class="stat-tiles" id="network-subtiles"></div>
     <div id="origin-networks"></div>
 
     <h3 class="subnet-title">Uncovered Origins</h3>
@@ -294,6 +307,14 @@ export function renderExportHtml(data: ExportData): string {
       '<div class="stat-tile-total ' + cls + '">' + value + (pct !== undefined ? '<span class="stat-tile-pct">' + pct + '%</span>' : '') + '</div></div>';
   }
 
+  // Plain, non-interactive tile for the top-of-page overview panels \\u2014 the real
+  // click-to-filter tiles live further down, right above the table they filter.
+  function staticTileHtml(label, value, cls) {
+    return '<div class="stat-tile static">' +
+      '<div class="stat-tile-label">' + escapeHtml(label) + '</div>' +
+      '<div class="stat-tile-total ' + cls + '">' + value + '</div></div>';
+  }
+
   function bindToggleTiles(containerId, attr, onChange) {
     var el = document.getElementById(containerId);
     function handle(e) {
@@ -316,6 +337,20 @@ export function renderExportHtml(data: ExportData): string {
   var hostEnvFilter = "all";
   var hostLiveFilter = "live";
   var hostLiveSubFilter = "all";
+
+  // Static snapshot across every env, for the top overview panel \\u2014 unaffected by the
+  // env filter and live/classical/dead filter used by the interactive tiles below.
+  function renderOverviewDomainsTiles() {
+    var total = hosts.length;
+    var liveCount = hosts.filter(function (h) { return hostBucket(h) === "live"; }).length;
+    var classicalCount = hosts.filter(function (h) { return hostBucket(h) === "classical"; }).length;
+    var deadCount = hosts.filter(function (h) { return hostBucket(h) === "dead"; }).length;
+    document.getElementById("overview-domains-tiles").innerHTML =
+      staticTileHtml("Total", total, "") +
+      staticTileHtml("Live", liveCount, "good") +
+      staticTileHtml("Classical", classicalCount, "warning") +
+      staticTileHtml("Dead", deadCount, "critical");
+  }
 
   function renderEnvButtons() {
     var labels = Array.from(new Set(hosts.map(function (h) { return h.account_label; }).filter(Boolean))).sort();
@@ -568,6 +603,7 @@ export function renderExportHtml(data: ExportData): string {
     renderServices();
   });
 
+  renderOverviewDomainsTiles();
   renderLegend();
   renderEnvButtons();
   renderHostnames();
