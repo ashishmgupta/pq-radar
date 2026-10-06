@@ -512,6 +512,7 @@ ul.plain li { margin-bottom: 6px; font-size: 14.5px; }
       <a href="#overview">Overview</a>
       <a href="#architecture">Architecture</a>
       <a href="#schema">Database schema</a>
+      <a href="#connectors">Connectors</a>
       <a href="#container">Probe container</a>
       <a href="#targeting">Scan targeting</a>
       <a href="#api">API reference</a>
@@ -722,19 +723,7 @@ ul.plain li { margin-bottom: 6px; font-size: 14.5px; }
         <p style="margin:10px 0 0; font-size:12.5px; color:var(--ink-muted);">A sixth value, <code class="inline">edge_to_origin</code>, exists in the type system but is never written by any code path &mdash; presumably reserved for a feature that was never built. <code class="inline">leg</code> has no CHECK constraint, so new values need no migration.</p>
       </div>
       <h3>Connector tables &nbsp;&middot;&nbsp; migration 0009 <span class="status s-built">applied to production</span></h3>
-      <p>Provider-neutral tables for discovery adapters (Cloudflare, Azure, F5 Distributed Cloud). Each provider reduces to an <strong>edge</strong> that terminates TLS and the <strong>origin</strong> behind it. The edge opens a separate session to the origin, so both legs are scanned independently: hybrid ML-KEM on one leg says nothing about the other.</p>
-      <p>The tables are dormant. Nothing reads or writes them yet, and no existing table, query or route depends on them. <code class="inline">connector_results.outcome</code> uses the same six values as <code class="inline">results.outcome</code>. Fresh installs get them from <code class="inline">schema.sql</code>, and existing databases get them from <code class="inline">migrations apply</code>.</p>
-      <table class="cols">
-        <tr><td class="col-name">Adapter contract</td><td>One read-only credential per provider account. The adapter walks the provider API and writes normalized edge and origin rows. Scanning, runs and reports never learn which provider a row came from.</td></tr>
-        <tr><td class="col-name">Access</td><td>Narrow read-only keys: Cloudflare zone and DNS read today. The database stores a reference to a credential, never the credential.</td></tr>
-        <tr><td class="col-name">Open</td><td>Whether an edge row holds the zone or one row per hostname; whether a shared origin IP is one row or one per edge; Azure and F5 Distributed Cloud API mappings.</td></tr>
-      </table>
-      <table class="cols">
-        <tr><td class="col-name">Step 1</td><td>Cloudflare discovery <span class="status s-built">built</span>, not yet behind the adapter interface</td></tr>
-        <tr><td class="col-name">Step 2</td><td>Connector tables <span class="status s-built">applied</span>; move Cloudflare behind the adapter contract <span class="status s-next">next</span></td></tr>
-        <tr><td class="col-name">Step 3</td><td>Azure adapter <span class="status s-next">first new connector</span></td></tr>
-        <tr><td class="col-name">Step 4</td><td>F5 Distributed Cloud adapter <span class="status s-later">second new connector</span></td></tr>
-      </table>
+      <p>Five dormant tables. The model, sync flow and roadmap are in <a href="#connectors">Connectors</a>. Nothing reads or writes these yet, and no existing table, query or route depends on them.</p>
       <div class="grid-2">
         <div class="card schema-card">
           <div class="schema-card-head"><span class="schema-name">connectors</span></div>
@@ -797,6 +786,110 @@ ul.plain li { margin-bottom: 6px; font-size: 14.5px; }
           </table>
         </div>
       </div>
+    </section>
+
+    <section id="connectors">
+      <div class="section-head">
+        <p class="section-kicker">03b &middot; Provider-neutral discovery</p>
+        <h2>Connectors</h2>
+        <p class="lede">Discovery is becoming provider-neutral. Each provider reduces to an edge that terminates TLS and the origin behind it. Both legs are scanned independently, and every adapter writes the same rows.</p>
+      </div>
+
+      <h3>Edge and origin</h3>
+      <p>The edge terminates TLS for outside clients and opens a separate session to the origin. Hybrid ML-KEM on one leg says nothing about the other, so each leg is scanned on its own.</p>
+      <figure>
+        <svg viewBox="0 0 760 220" role="img" aria-label="Client connects to the edge on leg one; the edge connects to the origin on leg two; the scanner probes each leg separately">
+          <defs>
+            <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" style="fill:var(--ink-muted)"/>
+            </marker>
+          </defs>
+          <rect x="20" y="80" width="130" height="64" rx="6" style="fill:none;stroke:var(--ink-muted)" stroke-width="1.5"/>
+          <text x="85" y="118" text-anchor="middle" font-size="15" style="fill:var(--ink)">Client</text>
+          <rect x="300" y="80" width="160" height="64" rx="6" style="fill:none;stroke:var(--accent)" stroke-width="2.5"/>
+          <text x="380" y="110" text-anchor="middle" font-size="15" font-weight="600" style="fill:var(--accent)">Edge</text>
+          <text x="380" y="131" text-anchor="middle" font-size="12.5" style="fill:var(--ink-muted)">zone / load balancer</text>
+          <rect x="600" y="80" width="140" height="64" rx="6" style="fill:none;stroke:var(--warn)" stroke-width="2.5"/>
+          <text x="670" y="110" text-anchor="middle" font-size="15" font-weight="600" style="fill:var(--warn)">Origin</text>
+          <text x="670" y="131" text-anchor="middle" font-size="12.5" style="fill:var(--ink-muted)">backend host or IP</text>
+          <line x1="150" y1="112" x2="298" y2="112" style="stroke:var(--ink-muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+          <line x1="460" y1="112" x2="598" y2="112" style="stroke:var(--ink-muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+          <text x="224" y="100" text-anchor="middle" font-size="12.5" style="fill:var(--ink-muted)">TLS session 1</text>
+          <text x="529" y="100" text-anchor="middle" font-size="12.5" style="fill:var(--ink-muted)">TLS session 2</text>
+          <rect x="270" y="180" width="220" height="34" rx="6" style="fill:none;stroke:var(--ink)" stroke-width="1.5" stroke-dasharray="5 4"/>
+          <text x="380" y="202" text-anchor="middle" font-size="14" style="fill:var(--ink)">PQ Radar scanner</text>
+          <path d="M330,180 L330,150" style="fill:none;stroke:var(--accent)" stroke-width="2" marker-end="url(#arr)"/>
+          <path d="M490,197 L670,197 L670,150" style="fill:none;stroke:var(--warn)" stroke-width="2" marker-end="url(#arr)"/>
+          <text x="318" y="168" text-anchor="end" font-size="12.5" style="fill:var(--accent)">edge leg</text>
+          <text x="580" y="190" text-anchor="middle" font-size="12.5" style="fill:var(--warn)">origin leg</text>
+        </svg>
+        <figcaption>Two independent TLS sessions, two independent scans. The origin leg is probed directly, from an address the origin must allow.</figcaption>
+      </figure>
+
+      <h3>Provider mapping</h3>
+      <table class="cols">
+        <tr><th>Provider</th><th>Edge</th><th>Origin source</th><th>Read-only key scope</th><th>State</th></tr>
+        <tr><td class="col-name">Cloudflare</td><td>Zone</td><td>DNS records inside the zone</td><td>Zone and DNS read</td><td><span class="status s-built">discovery built</span> <span class="status s-next">adapter next</span></td></tr>
+        <tr><td class="col-name">Azure</td><td>To be mapped</td><td>To be mapped</td><td>To be confirmed</td><td><span class="status s-next">next</span></td></tr>
+        <tr><td class="col-name">F5 Distributed Cloud</td><td>Load balancer</td><td>Origin configured on the load balancer</td><td>Read on load balancer config</td><td><span class="status s-later">second</span></td></tr>
+      </table>
+      <p>Azure and F5 Distributed Cloud terminology and API calls must be confirmed against each provider's current documentation before their adapters are written.</p>
+
+      <h3>Adapter contract</h3>
+      <p>An adapter does one narrow job. How it walks a provider's API is private; the output shape is fixed.</p>
+      <table class="cols">
+        <tr><td class="col-name">Input</td><td>One scoped, read-only credential for the provider account.</td></tr>
+        <tr><td class="col-name">Work</td><td>Call the provider API, list edges, and find each edge's origin(s).</td></tr>
+        <tr><td class="col-name">Output</td><td>Normalized <code class="inline">edges</code> and <code class="inline">origins</code> rows, upserted on their UNIQUE keys.</td></tr>
+        <tr><td class="col-name">Not its job</td><td>Scanning, outcomes, reports, run history.</td></tr>
+      </table>
+      <p>Adding a provider means writing one adapter. The scanner, the connector tables and the reports do not change.</p>
+
+      <h3>Sync and scan flow</h3>
+      <ol class="flow">
+        <li><b>Connect.</b> One read-only key per provider account. A <code class="inline">connectors</code> row records the account and a <code class="inline">credential_ref</code>, never the secret.</li>
+        <li><b>Sync.</b> The adapter lists edges and origins and upserts them. Rows that already exist are updated; new ones are picked up on the next sync.</li>
+        <li><b>Stale, not deleted</b> <span class="status s-next">proposed</span>. Rows that disappear from the provider would be marked stale so history survives.</li>
+        <li><b>Scan.</b> A <code class="inline">connector_runs</code> row is created with a UUID <code class="inline">run_id</code>. Each edge and each origin is scanned, and one <code class="inline">connector_results</code> row is written per leg.</li>
+        <li><b>Report.</b> Per-host outcome, the leg it came from, and the provider.</li>
+      </ol>
+
+      <h3>Decisions</h3>
+      <table class="cols">
+        <tr><th>Topic</th><th>Decision</th></tr>
+        <tr><td class="col-name">Leg values</td><td>Same vocabulary as <code class="inline">results.leg</code>. No CHECK constraint, so a new leg needs no migration.</td></tr>
+        <tr><td class="col-name">Outcome</td><td>The six outcomes from <code class="inline">results.outcome</code>. No separate pass/fail verdict.</td></tr>
+        <tr><td class="col-name">Run identifiers</td><td>TEXT UUID from <code class="inline">crypto.randomUUID()</code>, as in <code class="inline">runs</code>.</td></tr>
+        <tr><td class="col-name">Timestamps</td><td>ISO 8601 UTC text, as everywhere else in the app.</td></tr>
+        <tr><td class="col-name">Table names</td><td><code class="inline">connector_runs</code> and <code class="inline">connector_results</code>, so they are not confused with <code class="inline">runs</code> and <code class="inline">results</code>.</td></tr>
+        <tr><td class="col-name">Secrets</td><td>Only a <code class="inline">credential_ref</code> is stored.</td></tr>
+      </table>
+
+      <h3>Access model</h3>
+      <ul>
+        <li>One narrow, read-only key per provider account. Cloudflare today: zone and DNS read.</li>
+        <li>F5 Distributed Cloud: read on load balancer configuration, nothing more.</li>
+        <li>Setup and deploy credentials stay separate from scanning credentials, as they are for Cloudflare now.</li>
+        <li>Origin-leg scans also depend on the scanner's egress address being allowed by each origin. That is still to be verified for each provider.</li>
+      </ul>
+
+      <h3>Roadmap</h3>
+      <table class="cols">
+        <tr><td class="col-name">Step 1</td><td>Cloudflare discovery <span class="status s-built">built</span>, not yet behind the adapter interface</td></tr>
+        <tr><td class="col-name">Step 2</td><td>Connector tables <span class="status s-built">applied</span>; move Cloudflare behind the adapter contract <span class="status s-next">next</span></td></tr>
+        <tr><td class="col-name">Step 3</td><td>Azure adapter <span class="status s-next">first new connector</span></td></tr>
+        <tr><td class="col-name">Step 4</td><td>F5 Distributed Cloud adapter <span class="status s-later">second new connector</span></td></tr>
+      </table>
+
+      <h3>Open questions</h3>
+      <ul>
+        <li><b>Edge scan target.</b> A zone or load balancer is a container, but a handshake needs a hostname. Decide whether an edge row holds the container with hostnames derived, or one row per hostname.</li>
+        <li><b>Shared origins.</b> One origin IP can sit behind several edges. Decide whether it is one row or one per edge.</li>
+        <li><b>Existing tables.</b> <code class="inline">subnets</code> and the latest-results <code class="inline">run_id</code> handling still need reconciling with connector runs.</li>
+        <li><b>Azure mapping.</b> Which Azure artifacts count as the edge, and where their origins are defined.</li>
+        <li><b>F5 Distributed Cloud API.</b> Confirm the read permission and the endpoints that expose load balancer and origin configuration.</li>
+        <li><b>Egress allowlisting.</b> Confirm the scanner's egress address is accepted by origins behind each provider.</li>
+      </ul>
     </section>
 
     <section id="container">
