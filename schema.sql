@@ -97,6 +97,58 @@ CREATE TABLE results (
 CREATE INDEX idx_results_leg_ip_ts ON results(leg, ip, ts);
 CREATE INDEX idx_results_run_id ON results(run_id);
 
+-- Provider-neutral connector tables (migration 0009). Dormant: nothing reads or writes them yet.
+CREATE TABLE connectors (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  provider TEXT NOT NULL,
+  label TEXT NOT NULL,
+  credential_ref TEXT NOT NULL,
+  last_sync_at TEXT
+);
+
+CREATE TABLE edges (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  connector_id INTEGER NOT NULL REFERENCES connectors(id),
+  native_type TEXT NOT NULL,
+  name TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  first_seen TEXT NOT NULL,
+  last_seen TEXT NOT NULL,
+  UNIQUE (connector_id, native_type, name)
+);
+
+CREATE TABLE origins (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  edge_id INTEGER NOT NULL REFERENCES edges(id),
+  target TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  first_seen TEXT NOT NULL,
+  last_seen TEXT NOT NULL,
+  UNIQUE (edge_id, target)
+);
+
+CREATE TABLE connector_runs (
+  run_id TEXT PRIMARY KEY,
+  connector_id INTEGER NOT NULL REFERENCES connectors(id),
+  started_at TEXT NOT NULL,
+  finished_at TEXT
+);
+
+CREATE TABLE connector_results (
+  run_id TEXT NOT NULL REFERENCES connector_runs(run_id),
+  edge_id INTEGER REFERENCES edges(id),
+  origin_id INTEGER REFERENCES origins(id),
+  leg TEXT NOT NULL,
+  outcome TEXT NOT NULL,
+  negotiated_group TEXT,
+  scanned_at TEXT NOT NULL
+);
+
+CREATE INDEX idx_edges_connector_id ON edges(connector_id);
+CREATE INDEX idx_origins_edge_id ON origins(edge_id);
+CREATE INDEX idx_connector_runs_connector_started ON connector_runs(connector_id, started_at);
+CREATE INDEX idx_connector_results_run_id ON connector_results(run_id);
+
 -- Wrangler's own migration-tracking table — see the file header comment.
 CREATE TABLE d1_migrations(
 		id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -112,4 +164,5 @@ INSERT INTO d1_migrations (name) VALUES
   ('0005_add_zones.sql'),
   ('0006_add_account_label.sql'),
   ('0007_add_leg_to_runs.sql'),
-  ('0008_cname_support.sql');
+  ('0008_cname_support.sql'),
+  ('0009_add_connector_tables.sql');

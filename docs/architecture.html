@@ -295,6 +295,10 @@ figcaption {
   color: var(--accent);
 }
 .schema-note { font-size: 12.5px; color: var(--ink-muted); margin: 0 0 14px; }
+.status { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 1px 8px; border-radius: 999px; vertical-align: 1px; }
+.status.s-built { background: var(--good-bg); color: var(--good); }
+.status.s-next { background: var(--accent-dim); color: var(--accent); }
+.status.s-later { background: var(--neutral-bg); color: var(--neutral); }
 table.cols { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.cols th {
   text-align: left;
@@ -613,7 +617,7 @@ ul.plain li { margin-bottom: 6px; font-size: 14.5px; }
       <div class="section-head">
         <p class="section-kicker">03 &middot; Storage</p>
         <h2>Database schema</h2>
-        <p class="lede">Six tables in D1. <code class="inline">runs</code> and <code class="inline">results</code> are the ones everything else in this doc keeps coming back to.</p>
+        <p class="lede">Eleven application tables in D1: six for scanning and inventory, five for connectors. <code class="inline">runs</code> and <code class="inline">results</code> are still the ones everything else in this doc keeps coming back to.</p>
       </div>
 
       <div class="grid-2">
@@ -717,8 +721,20 @@ ul.plain li { margin-bottom: 6px; font-size: 14.5px; }
         </div>
         <p style="margin:10px 0 0; font-size:12.5px; color:var(--ink-muted);">A sixth value, <code class="inline">edge_to_origin</code>, exists in the type system but is never written by any code path &mdash; presumably reserved for a feature that was never built. <code class="inline">leg</code> has no CHECK constraint, so new values need no migration.</p>
       </div>
-      <h3>Connector tables &nbsp;&middot;&nbsp; migration 0009 (dormant)</h3>
-      <p>Provider-neutral tables for future discovery adapters (Cloudflare, Azure, F5 Distributed Cloud). Each provider reduces to an edge and the origin behind it, and each leg is scanned independently. Nothing reads or writes these yet, and the existing tables are unchanged. <code class="inline">connector_results.outcome</code> uses the same six values as <code class="inline">results.outcome</code>.</p>
+      <h3>Connector tables &nbsp;&middot;&nbsp; migration 0009 <span class="status s-built">applied to production</span></h3>
+      <p>Provider-neutral tables for discovery adapters (Cloudflare, Azure, F5 Distributed Cloud). Each provider reduces to an <strong>edge</strong> that terminates TLS and the <strong>origin</strong> behind it. The edge opens a separate session to the origin, so both legs are scanned independently: hybrid ML-KEM on one leg says nothing about the other.</p>
+      <p>The tables are dormant. Nothing reads or writes them yet, and no existing table, query or route depends on them. <code class="inline">connector_results.outcome</code> uses the same six values as <code class="inline">results.outcome</code>. Fresh installs get them from <code class="inline">schema.sql</code>, and existing databases get them from <code class="inline">migrations apply</code>.</p>
+      <table class="cols">
+        <tr><td class="col-name">Adapter contract</td><td>One read-only credential per provider account. The adapter walks the provider API and writes normalized edge and origin rows. Scanning, runs and reports never learn which provider a row came from.</td></tr>
+        <tr><td class="col-name">Access</td><td>Narrow read-only keys: Cloudflare zone and DNS read today. The database stores a reference to a credential, never the credential.</td></tr>
+        <tr><td class="col-name">Open</td><td>Whether an edge row holds the zone or one row per hostname; whether a shared origin IP is one row or one per edge; Azure and F5 Distributed Cloud API mappings.</td></tr>
+      </table>
+      <table class="cols">
+        <tr><td class="col-name">Step 1</td><td>Cloudflare discovery <span class="status s-built">built</span>, not yet behind the adapter interface</td></tr>
+        <tr><td class="col-name">Step 2</td><td>Connector tables <span class="status s-built">applied</span>; move Cloudflare behind the adapter contract <span class="status s-next">next</span></td></tr>
+        <tr><td class="col-name">Step 3</td><td>Azure adapter <span class="status s-next">first new connector</span></td></tr>
+        <tr><td class="col-name">Step 4</td><td>F5 Distributed Cloud adapter <span class="status s-later">second new connector</span></td></tr>
+      </table>
       <div class="grid-2">
         <div class="card schema-card">
           <div class="schema-card-head"><span class="schema-name">connectors</span></div>
