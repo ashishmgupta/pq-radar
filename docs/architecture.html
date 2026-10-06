@@ -717,6 +717,70 @@ ul.plain li { margin-bottom: 6px; font-size: 14.5px; }
         </div>
         <p style="margin:10px 0 0; font-size:12.5px; color:var(--ink-muted);">A sixth value, <code class="inline">edge_to_origin</code>, exists in the type system but is never written by any code path &mdash; presumably reserved for a feature that was never built. <code class="inline">leg</code> has no CHECK constraint, so new values need no migration.</p>
       </div>
+      <h3>Connector tables &nbsp;&middot;&nbsp; migration 0009 (dormant)</h3>
+      <p>Provider-neutral tables for future discovery adapters (Cloudflare, Azure, F5 Distributed Cloud). Each provider reduces to an edge and the origin behind it, and each leg is scanned independently. Nothing reads or writes these yet, and the existing tables are unchanged. <code class="inline">connector_results.outcome</code> uses the same six values as <code class="inline">results.outcome</code>.</p>
+      <div class="grid-2">
+        <div class="card schema-card">
+          <div class="schema-card-head"><span class="schema-name">connectors</span></div>
+          <p class="schema-note">One row per provider account or tenant. Holds a reference to the credential, never the secret.</p>
+          <table class="cols">
+            <tr><td class="col-name">id</td><td class="col-type">INT pk</td><td></td></tr>
+            <tr><td class="col-name">provider</td><td class="col-type">TEXT</td><td>cloudflare / azure / f5xc</td></tr>
+            <tr><td class="col-name">label</td><td class="col-type">TEXT</td><td>account or tenant name</td></tr>
+            <tr><td class="col-name">credential_ref</td><td class="col-type">TEXT</td><td>pointer to the stored secret</td></tr>
+            <tr><td class="col-name">last_sync_at</td><td class="col-type">TEXT</td><td>ISO 8601 UTC</td></tr>
+          </table>
+        </div>
+
+        <div class="card schema-card">
+          <div class="schema-card-head"><span class="schema-name">edges</span></div>
+          <p class="schema-note">The entry point that terminates TLS: a Cloudflare zone, an F5 XC load balancer, and so on.</p>
+          <table class="cols">
+            <tr><td class="col-name">id</td><td class="col-type">INT pk</td><td></td></tr>
+            <tr><td class="col-name">connector_id</td><td class="col-type">INT fk</td><td></td></tr>
+            <tr><td class="col-name">native_type</td><td class="col-type">TEXT</td><td>zone / load_balancer / ...</td></tr>
+            <tr><td class="col-name">name</td><td class="col-type">TEXT</td><td>unique per connector and type</td></tr>
+            <tr><td class="col-name">status</td><td class="col-type">TEXT</td><td>default active</td></tr>
+            <tr><td class="col-name">first_seen / last_seen</td><td class="col-type">TEXT</td><td></td></tr>
+          </table>
+        </div>
+
+        <div class="card schema-card">
+          <div class="schema-card-head"><span class="schema-name">origins</span></div>
+          <p class="schema-note">The server behind an edge. A separate session from the edge, so it is scanned on its own.</p>
+          <table class="cols">
+            <tr><td class="col-name">id</td><td class="col-type">INT pk</td><td></td></tr>
+            <tr><td class="col-name">edge_id</td><td class="col-type">INT fk</td><td></td></tr>
+            <tr><td class="col-name">target</td><td class="col-type">TEXT</td><td>hostname or IP; unique per edge</td></tr>
+            <tr><td class="col-name">status</td><td class="col-type">TEXT</td><td>default active</td></tr>
+            <tr><td class="col-name">first_seen / last_seen</td><td class="col-type">TEXT</td><td></td></tr>
+          </table>
+        </div>
+
+        <div class="card schema-card">
+          <div class="schema-card-head"><span class="schema-name">connector_runs</span></div>
+          <p class="schema-note">One row per connector scan execution. Named apart from <code class="inline">runs</code> on purpose.</p>
+          <table class="cols">
+            <tr><td class="col-name">run_id</td><td class="col-type">TEXT pk</td><td>crypto.randomUUID(), like runs</td></tr>
+            <tr><td class="col-name">connector_id</td><td class="col-type">INT fk</td><td></td></tr>
+            <tr><td class="col-name">started_at / finished_at</td><td class="col-type">TEXT</td><td></td></tr>
+          </table>
+        </div>
+
+        <div class="card schema-card">
+          <div class="schema-card-head"><span class="schema-name">connector_results</span></div>
+          <p class="schema-note">One row per leg per target per run. Named apart from <code class="inline">results</code> on purpose.</p>
+          <table class="cols">
+            <tr><td class="col-name">run_id</td><td class="col-type">TEXT fk</td><td></td></tr>
+            <tr><td class="col-name">edge_id</td><td class="col-type">INT fk</td><td>set for edge legs</td></tr>
+            <tr><td class="col-name">origin_id</td><td class="col-type">INT fk</td><td>set for origin legs</td></tr>
+            <tr><td class="col-name">leg</td><td class="col-type">TEXT</td><td>same values as results.leg</td></tr>
+            <tr><td class="col-name">outcome</td><td class="col-type">TEXT</td><td>pq / classical / downgrade / intolerant / indeterminate / unreachable</td></tr>
+            <tr><td class="col-name">negotiated_group</td><td class="col-type">TEXT</td><td></td></tr>
+            <tr><td class="col-name">scanned_at</td><td class="col-type">TEXT</td><td></td></tr>
+          </table>
+        </div>
+      </div>
     </section>
 
     <section id="container">
