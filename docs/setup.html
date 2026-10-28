@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PQ Radar — Setup Guide</title>
+<style>
+  :root{
+    --bg:#0a0a0a;
+    --panel:#111214;
+    --panel-2:#16181b;
+    --border:#24272c;
+    --border-soft:#1c1f23;
+    --ink:#e7e9ea;
+    --ink-dim:#9aa0a6;
+    --ink-faint:#6b7280;
+    --green:#22c55e;
+    --green-dim:#15803d;
+    --red:#ef4444;
+    --amber:#f59e0b;
+    --amber-bg:rgba(245,158,11,.14);
+    --blue:#7dd3fc;
+    --mono:'JetBrains Mono','SF Mono',ui-monospace,'Cascadia Code','Consolas',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--mono);line-height:1.65;font-size:15px;-webkit-font-smoothing:antialiased}
+  a{color:var(--green);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:980px;margin:0 auto;padding:36px 20px 120px}
+
+  .doc-head{margin-bottom:26px;padding-bottom:22px;border-bottom:1px solid var(--border)}
+  .lead-tag{display:inline-block;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--green);border:1px solid var(--green-dim);border-radius:4px;padding:3px 9px;margin-bottom:14px}
+  .doc-head h1{font-size:26px;font-weight:700;letter-spacing:-.3px;margin-bottom:10px}
+  .doc-head p{color:var(--ink-dim);font-size:13.5px;max-width:760px}
+
+  /* ---- Tabs ---- */
+  .tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;margin-bottom:22px;border-bottom:1px solid var(--border);scrollbar-width:thin}
+  .tab{flex:0 0 auto;font-family:var(--mono);font-size:12.5px;color:var(--ink-dim);background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:7px 12px;cursor:pointer;white-space:nowrap}
+  .tab:hover{color:var(--ink);border-color:var(--ink-faint)}
+  .tab .n{color:var(--ink-faint);margin-right:6px;font-size:11px}
+  .tab[aria-selected="true"]{color:var(--green);border-color:var(--green-dim);background:var(--panel-2)}
+  .tab[aria-selected="true"] .n{color:var(--green)}
+  .tab:focus-visible,.btn:focus-visible,.copy:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+
+  .panel{display:none}
+  .panel.active{display:block}
+  .panel h2{font-size:21px;font-weight:700;margin:2px 0 8px;letter-spacing:-.2px}
+  .panel h2 .g{color:var(--green)}
+  .panel h3{font-size:14px;font-weight:600;margin:26px 0 8px}
+  .intro{color:var(--ink-dim);font-size:14px;margin-bottom:18px;max-width:780px}
+  p{margin-bottom:12px}
+  .body-txt{color:var(--ink-dim);font-size:13.5px}
+  ul.plain,ol.plain{margin:10px 0 14px;padding-left:0;list-style:none}
+  ul.plain li,ol.plain li{color:var(--ink-dim);font-size:13.5px;padding-left:20px;position:relative;margin-bottom:7px}
+  ul.plain li::before{content:'→';position:absolute;left:0;color:var(--green-dim)}
+  ol.plain{counter-reset:s}
+  ol.plain li{counter-increment:s;padding-left:30px}
+  ol.plain li::before{content:counter(s);position:absolute;left:0;top:1px;width:20px;height:20px;border-radius:50%;background:var(--panel-2);border:1px solid var(--border);color:var(--green);font-size:11px;text-align:center;line-height:18px}
+  li b,p b{color:var(--ink)}
+
+  .ic{font-family:var(--mono);font-size:12.5px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:4px;padding:1px 6px;color:var(--ink)}
+  /* Placeholders: the values you must replace */
+  .ph{background:var(--amber-bg);color:var(--amber);border-radius:3px;padding:0 3px;outline:1px dashed rgba(245,158,11,.5)}
+
+  .code{background:#050506;border:1px solid var(--border);border-radius:8px;margin:14px 0;overflow:hidden}
+  .code-bar{display:flex;align-items:center;gap:8px;padding:7px 12px;background:var(--panel);border-bottom:1px solid var(--border-soft);font-size:11px;color:var(--ink-faint);letter-spacing:.5px}
+  .code-bar .label{flex:1}
+  .copy{font-family:var(--mono);font-size:11px;color:var(--ink-dim);background:transparent;border:1px solid var(--border);border-radius:4px;padding:2px 9px;cursor:pointer}
+  .copy:hover{color:var(--green);border-color:var(--green-dim)}
+  pre{padding:13px 16px;overflow-x:auto;font-size:12.8px;line-height:1.7}
+  code{font-family:var(--mono)}
+  .cmt{color:var(--ink-faint)}
+
+  .note,.warn,.crit{border-radius:8px;padding:12px 15px;margin:16px 0;font-size:13px;color:var(--ink-dim);border:1px solid var(--border);background:var(--panel)}
+  .note{border-left:3px solid var(--green-dim)}
+  .warn{border-left:3px solid var(--amber)}
+  .crit{border-left:3px solid var(--red)}
+  .note strong,.warn strong,.crit strong{color:var(--ink)}
+
+  table{width:100%;border-collapse:collapse;margin:12px 0 18px;font-size:12.5px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border-soft);vertical-align:top;color:var(--ink-dim)}
+  th{color:var(--ink-faint);font-size:11px;letter-spacing:1px;text-transform:uppercase;font-weight:600;border-bottom:1px solid var(--border)}
+  td:first-child{color:var(--ink)}
+  .tw{overflow-x:auto}
+  .pill{display:inline-block;font-size:10.5px;letter-spacing:.5px;text-transform:uppercase;border-radius:10px;padding:1px 8px;border:1px solid var(--border);color:var(--ink-faint);white-space:nowrap}
+  .pill.req{color:var(--amber);border-color:rgba(245,158,11,.5)}
+  .pill.opt{color:var(--ink-faint)}
+
+  .pager{display:flex;justify-content:space-between;gap:10px;margin-top:34px;padding-top:18px;border-top:1px solid var(--border)}
+  .btn{font-family:var(--mono);font-size:12.5px;color:var(--ink);background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:8px 14px;cursor:pointer}
+  .btn:hover{border-color:var(--green-dim);color:var(--green)}
+  .btn[disabled]{opacity:.35;pointer-events:none}
+  .foot{margin-top:50px;font-size:11.5px;color:var(--ink-faint)}
+  @media (max-width:640px){.wrap{padding:24px 16px 90px}.doc-head h1{font-size:22px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="doc-head">
+    <span class="lead-tag">Setup guide</span>
+    <h1>Clone and deploy PQ Radar to a company Cloudflare account</h1>
+    <p>One tab per step, in order. Commands are PowerShell (Windows). Anything highlighted like <span class="ph">this</span> is a placeholder in the code or config that you must replace with your own value. Real values go in a local, gitignored config file &mdash; never in the repo.</p>
+  </header>
+
+  <div class="tabs" role="tablist" aria-label="Setup steps" id="tabs"></div>
+
+  <!-- ===================== 0 ===================== -->
+  <section class="panel" data-title="Overview" id="p-overview" role="tabpanel">
+    <h2>Overview <span class="g">&amp; checklist</span></h2>
+    <p class="intro">PQ Radar is a Cloudflare Worker (UI + API), a D1 database, and a Python probe container that runs the TLS/SSH/FTPS handshakes. Setup is about 30&ndash;45 minutes once you have the access below.</p>
+
+    <h3>Two kinds of Cloudflare account &mdash; don't conflate them</h3>
+    <div class="tw"><table>
+      <tr><th>Role</th><th>What it does</th><th>Config it drives</th></tr>
+      <tr><td>Hosting account</td><td>Where the Worker, D1 database, Durable Object and container image live. <span class="ic">wrangler deploy</span> acts here.</td><td>Your Wrangler login / setup token. Optional <span class="ic">account_id</span> in the local config.</td></tr>
+      <tr><td>Scanned account(s)</td><td>Whose zones and DNS records are read to build the hostname &rarr; origin map. Read-only. Can be the same account or different ones.</td><td><span class="ic">CF_ACCOUNT_ID</span>, <span class="ic">CF_ACCOUNT_ID_QA</span> (vars) plus <span class="ic">CF_API_TOKEN</span>, <span class="ic">CF_API_TOKEN_QA</span> (secrets).</td></tr>
+    </table></div>
+
+    <h3>The path</h3>
+    <ol class="plain">
+      <li><b>Permissions</b> &mdash; confirm every access, plan and approval first (next tab). Most delays happen here.</li>
+      <li><b>Clone &amp; install</b> the repo.</li>
+      <li><b>Authenticate</b> Wrangler to the hosting account.</li>
+      <li><b>Config</b> &mdash; create <span class="ic">wrangler.local.jsonc</span> and fill every <span class="ph">placeholder</span>.</li>
+      <li><b>D1</b> &mdash; create the database, apply the schema.</li>
+      <li><b>Deploy</b> the Worker and container.</li>
+      <li><b>Secrets</b> &mdash; the read-only scan tokens.</li>
+      <li><b>Access</b> &mdash; put Cloudflare Access in front of the UI.</li>
+      <li><b>First run</b> &mdash; pull zones, scan, verify.</li>
+    </ol>
+
+    <div class="note"><strong>Why deploy before secrets:</strong> secrets attach to an existing Worker, and the first deploy also builds the container (the slow part). Doing it in this order means you hit any Docker or plan problem before you've handled any tokens.</div>
+  </section>
+
+  <!-- ===================== 1 ===================== -->
+  <section class="panel" data-title="Permissions" id="p-permissions" role="tabpanel">
+    <h2>Permissions <span class="g">&amp; prerequisites</span></h2>
+    <p class="intro">Everything you need before touching a command. Permission names are as the Cloudflare dashboard labels them at the time of writing; labels shift slightly, but the capability is what matters.</p>
+
+    <h3>A. Your Cloudflare user (dashboard)</h3>
+    <div class="tw"><table>
+      <tr><th>Need</th><th>Why</th><th></th></tr>
+      <tr><td>Member of the hosting account with rights to create Workers and D1 databases</td><td>Deploy the Worker, create the database. An Administrator or a role with Workers + D1 edit works.</td><td><span class="pill req">required</span></td></tr>
+      <tr><td>Zero Trust enabled on that account, and a role that can edit Access applications and policies</td><td>Create the Access application and copy its AUD tag. Creating a Zero Trust organization (team name) is a one-time step if it doesn't exist. Free plan covers up to 50 users.</td><td><span class="pill req">required for Access</span></td></tr>
+      <tr><td>Read access to the zones/DNS on each scanned account</td><td>Needed to create the scan token and confirm the account IDs.</td><td><span class="pill req">required</span></td></tr>
+    </table></div>
+
+    <h3>B. Plan</h3>
+    <ul class="plain">
+      <li><b>Workers Paid plan</b> on the hosting account. The probe runs on Cloudflare Containers, which (to my knowledge) is not available on the free Workers plan. Confirm this with whoever owns the account <i>before</i> starting.</li>
+      <li>D1 and the Zero Trust free tier need nothing extra for this app.</li>
+    </ul>
+
+    <h3>C. Setup token &mdash; what <span class="ic">wrangler</span> itself acts as</h3>
+    <p class="body-txt">Used a handful of times to provision. A scoped token is safer than full admin and easier to get approved. Create it under <b>My Profile &rarr; API Tokens</b> (or Account API Tokens), scoped to the hosting account. Alternatively use <span class="ic">npx wrangler login</span> if OAuth for CLIs is allowed.</p>
+    <div class="tw"><table>
+      <tr><th>Permission</th><th>Scope</th><th>Why</th></tr>
+      <tr><td>Workers Scripts &mdash; Edit</td><td>Account</td><td>Deploy the Worker</td></tr>
+      <tr><td>D1 &mdash; Edit</td><td>Account</td><td>Create the database, apply the schema</td></tr>
+      <tr><td>Workers Cloudflare Containers &mdash; Edit</td><td>Account</td><td>Build and push the probe container image</td></tr>
+      <tr><td>Account Settings &mdash; Read</td><td>Account</td><td>Lets Wrangler identify the account non-interactively</td></tr>
+      <tr><td>Workers Routes &mdash; Edit</td><td>Zone</td><td><span class="pill opt">only if</span> you attach a custom domain</td></tr>
+    </table></div>
+
+    <h3>D. Scan token(s) &mdash; one per scanned account</h3>
+    <p class="body-txt">Read-only and long-lived; stored as a Worker secret. If one leaks, the worst case is someone learns your DNS records. Account-wide scope is deliberate, so adding a zone later needs no token edit.</p>
+    <div class="tw"><table>
+      <tr><th>Permission</th><th>Scope</th><th>Why</th></tr>
+      <tr><td>Zone &mdash; Read</td><td>All zones on that account</td><td>Enumerate which zones exist</td></tr>
+      <tr><td>DNS &mdash; Read</td><td>All zones on that account</td><td>Read the records that build hostname &rarr; origin</td></tr>
+    </table></div>
+
+    <h3>E. This laptop</h3>
+    <ul class="plain">
+      <li>Git, and <b>Node.js</b> (current LTS) with npm.</li>
+      <li><b>Docker Desktop, running</b> &mdash; <span class="ic">wrangler deploy</span> builds the container image locally and pushes it. Without Docker the Worker can deploy but the probe cannot, so scans will not work.</li>
+      <li>Outbound HTTPS to <span class="ic">api.cloudflare.com</span>, <span class="ic">registry.cloudflare.com</span>, the npm registry and Docker Hub. Behind a TLS-inspecting proxy you may need <span class="ic">NODE_EXTRA_CA_CERTS</span> pointing at the corporate root CA, and the same CA trusted by Docker.</li>
+      <li>PowerShell. Commands below use <span class="ic">$env:NAME = "..."</span> syntax and <span class="ic">curl.exe</span> (not the PowerShell <span class="ic">curl</span> alias).</li>
+    </ul>
+
+    <h3>F. Approvals and network, not Cloudflare permissions</h3>
+    <ul class="plain">
+      <li><b>Tell the security team.</b> Scans open real TLS connections to your own origins; a continuous schedule can trip monitoring or read as probing. The default cron is once a day.</li>
+      <li><b>Origin firewalls</b> must accept connections from Cloudflare's container egress, and only publicly reachable origins can be scanned &mdash; private (RFC 1918) addresses are out of reach.</li>
+      <li><b><span class="ic">workers.dev</span> may be blocked by company policy.</b> A custom domain means a DNS record on a shared zone, which usually needs someone else's sign-off.</li>
+      <li>Confirm you are allowed to run this scanner against the target accounts.</li>
+    </ul>
+  </section>
+
+  <!-- ===================== 2 ===================== -->
+  <section class="panel" data-title="Clone &amp; install" id="p-clone" role="tabpanel">
+    <h2>Clone <span class="g">&amp; install</span></h2>
+    <p class="intro">The public repo ships with no real IDs, zones or secrets, so a fresh clone is safe to work in.</p>
+    <div class="code"><div class="code-bar"><span class="label">powershell</span><button class="copy">copy</button></div><pre><code>git clone https://github.com/ashishmgupta/pq-radar.git
+cd pq-radar
+npm install
+node --version   <span class="cmt"># confirm Node is installed</span>
+docker --version <span class="cmt"># confirm Docker is installed; Docker Desktop must also be running</span></code></pre></div>
+    <div class="warn"><strong>The repo is public.</strong> Never commit real account IDs, the database ID, Access values or tokens. Step 4 puts them in <span class="ic">wrangler.local.jsonc</span>, which is already in <span class="ic">.gitignore</span>. Before any commit, run <span class="ic">git status</span> and read the list.</div>
+  </section>
+
+  <!-- ===================== 3 ===================== -->
+  <section class="panel" data-title="Authenticate" id="p-auth" role="tabpanel">
+    <h2>Authenticate <span class="g">Wrangler</span></h2>
+    <p class="intro">Point Wrangler at the hosting account. On a company account, prefer the scoped setup token from the Permissions tab &mdash; no OAuth popup, and it sidesteps policies that block third-party OAuth for CLIs.</p>
+    <div class="code"><div class="code-bar"><span class="label">powershell &mdash; setup token (preferred)</span><button class="copy">copy</button></div><pre><code>$env:CLOUDFLARE_API_TOKEN  = "<span class="ph">YOUR-SETUP-TOKEN</span>"
+$env:CLOUDFLARE_ACCOUNT_ID = "<span class="ph">HOSTING-ACCOUNT-ID</span>"
+npx wrangler whoami</code></pre></div>
+    <div class="code"><div class="code-bar"><span class="label">powershell &mdash; or browser login</span><button class="copy">copy</button></div><pre><code>npx wrangler login
+npx wrangler whoami</code></pre></div>
+    <ul class="plain">
+      <li><span class="ic">whoami</span> must list the <b>hosting</b> account and the permissions from the setup token. If it shows the wrong account, fix it now &mdash; a deploy to the wrong account is the costliest mistake in this guide.</li>
+      <li>Environment variables last for this PowerShell session only. Re-export them in any new window.</li>
+      <li>Where to find an account ID: dashboard &rarr; Account home &rarr; the &ldquo;&#8943;&rdquo; menu next to the account &rarr; <i>Copy account ID</i>; or the right sidebar of any zone's Overview page.</li>
+    </ul>
+    <div class="crit"><strong>Don't paste tokens into chat, tickets or files in the repo.</strong> The setup token is only ever set as an environment variable.</div>
+  </section>
+
+  <!-- ===================== 4 ===================== -->
+  <section class="panel" data-title="Config &amp; placeholders" id="p-config" role="tabpanel">
+    <h2>Config <span class="g">&amp; placeholders</span></h2>
+    <p class="intro">The tracked <span class="ic">wrangler.jsonc</span> contains placeholders. Copy it to a local, gitignored file and fill those in there &mdash; the real values never touch the repo.</p>
+    <div class="code"><div class="code-bar"><span class="label">powershell</span><button class="copy">copy</button></div><pre><code>Copy-Item wrangler.jsonc wrangler.local.jsonc
+git check-ignore wrangler.local.jsonc   <span class="cmt"># must print the filename; if blank, STOP</span>
+git status                              <span class="cmt"># wrangler.local.jsonc must NOT be listed</span></code></pre></div>
+
+    <h3>Placeholders to replace in <span class="ic">wrangler.local.jsonc</span></h3>
+    <div class="tw"><table>
+      <tr><th>Key</th><th>Placeholder in the file</th><th>Replace with / where to find it</th></tr>
+      <tr><td><span class="ic">vars.CF_ACCOUNT_ID</span></td><td><span class="ph">REPLACE_WITH_YOUR_DEV_CLOUDFLARE_ACCOUNT_ID</span></td><td>Account ID of the (first) account whose zones you want scanned; labelled &ldquo;dev&rdquo; in the UI. Dashboard &rarr; Copy account ID.</td></tr>
+      <tr><td><span class="ic">vars.CF_ACCOUNT_ID_QA</span></td><td><span class="ph">REPLACE_WITH_YOUR_QA_CLOUDFLARE_ACCOUNT_ID</span></td><td>Second scanned account, labelled &ldquo;qa&rdquo;. <b>Scanning only one account? Delete this whole line</b> &mdash; leaving the placeholder string makes the app try a bogus account.</td></tr>
+      <tr><td><span class="ic">d1_databases[0].database_id</span></td><td><span class="ph">REPLACE_WITH_YOUR_D1_DATABASE_ID</span></td><td>Printed by <span class="ic">wrangler d1 create</span> in step 5. Leave the placeholder for now.</td></tr>
+      <tr><td><span class="ic">vars.ACCESS_TEAM_DOMAIN</span></td><td>commented out: <span class="ph">&lt;team-name&gt;.cloudflareaccess.com</span></td><td>Uncomment in step 8. Zero Trust &rarr; Settings &rarr; Custom pages &rarr; Team domain.</td></tr>
+      <tr><td><span class="ic">vars.ACCESS_AUD</span></td><td>commented out: <span class="ph">&lt;application-aud-tag&gt;</span></td><td>Uncomment in step 8. From the Access application's <i>Additional settings &rarr; AUD tag</i>.</td></tr>
+      <tr><td><span class="ic">account_id</span> <span class="pill opt">optional</span></td><td>not present</td><td>Add a top-level <span class="ic">"account_id": "<span class="ph">HOSTING-ACCOUNT-ID</span>"</span> to the local file if your login can see several accounts, so Wrangler never prompts or picks the wrong one.</td></tr>
+    </table></div>
+
+    <h3>What it should look like</h3>
+    <div class="code"><div class="code-bar"><span class="label">wrangler.local.jsonc &mdash; relevant parts</span><button class="copy">copy</button></div><pre><code>{
+  "name": "pq-radar",
+  "main": "src/index.ts",
+  "account_id": "<span class="ph">HOSTING-ACCOUNT-ID</span>",          <span class="cmt">// optional, recommended</span>
+  "vars": {
+    "CF_ACCOUNT_ID": "<span class="ph">SCANNED-ACCOUNT-ID</span>",
+    "CF_ACCOUNT_ID_QA": "<span class="ph">SECOND-SCANNED-ACCOUNT-ID</span>"   <span class="cmt">// delete if only one</span>
+    <span class="cmt">// Added in step 8:
+    // "ACCESS_TEAM_DOMAIN": "...", "ACCESS_AUD": "..."</span>
+  },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "pq-radar",
+      "database_id": "<span class="ph">D1-DATABASE-ID</span>" }
+  ]
+}</code></pre></div>
+
+    <h3>Other behavior in the file (no edit needed)</h3>
+    <ul class="plain">
+      <li><b>Cron</b> <span class="ic">0 6 * * *</span> &mdash; daily at 06:00 UTC. Raise it only after telling your security team.</li>
+      <li><b>Container</b> <span class="ic">max_instances: 1</span>, built from <span class="ic">./container/Dockerfile</span>; <b>Durable Object</b> <span class="ic">ProbeContainer</span>. Leave as is.</li>
+    </ul>
+
+    <h3>More than two scanned accounts?</h3>
+    <p class="body-txt">Instead of the two vars, set one var <span class="ic">CF_ACCOUNTS</span> to a JSON array of <span class="ic">{label, accountId}</span> pairs, plus one secret per label named <span class="ic">CF_API_TOKEN_&lt;LABEL&gt;</span> (label uppercased, non-alphanumerics replaced by <span class="ic">_</span>). When set, it replaces <span class="ic">CF_ACCOUNT_ID</span>/<span class="ic">_QA</span> entirely. See the README for the exact format.</p>
+
+    <div class="note"><strong>From here on, every Wrangler command ends with</strong> <span class="ic">-c wrangler.local.jsonc</span>. Without it Wrangler reads the placeholder file and fails or targets the wrong thing.</div>
+  </section>
+
+  <!-- ===================== 5 ===================== -->
+  <section class="panel" data-title="D1 database" id="p-d1" role="tabpanel">
+    <h2>Create the <span class="g">D1 database</span></h2>
+    <p class="intro">Needs the <b>D1 &mdash; Edit</b> permission. This creates an empty database and then loads the full table structure.</p>
+    <ol class="plain">
+      <li>Create it:
+        <div class="code"><div class="code-bar"><span class="label">powershell</span><button class="copy">copy</button></div><pre><code>npx wrangler d1 create pq-radar -c wrangler.local.jsonc</code></pre></div>
+      </li>
+      <li>Copy the <span class="ic">database_id</span> from the output into <span class="ic">wrangler.local.jsonc</span> &rarr; <span class="ic">d1_databases[0].database_id</span>, replacing <span class="ph">REPLACE_WITH_YOUR_D1_DATABASE_ID</span>. If Wrangler offers to write the binding into a config file, make sure that is the <i>local</i> file, not <span class="ic">wrangler.jsonc</span>.</li>
+      <li>Load the schema (brand-new, empty database only):
+        <div class="code"><div class="code-bar"><span class="label">powershell</span><button class="copy">copy</button></div><pre><code>npx wrangler d1 execute pq-radar --remote --file=schema.sql -c wrangler.local.jsonc</code></pre></div>
+      </li>
+      <li>Check the tables exist:
+        <div class="code"><div class="code-bar"><span class="label">powershell</span><button class="copy">copy</button></div><pre><code>npx wrangler d1 execute pq-radar --remote -c wrangler.local.jsonc `
+  --command "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"</code></pre></div>
+        You should see <span class="ic">runs</span>, <span class="ic">results</span>, <span class="ic">zones</span>, <span class="ic">dns_records</span>, <span class="ic">subnets</span> and others.
+      </li>
+    </ol>
+    <div class="warn"><strong>Run <span class="ic">schema.sql</span> once.</strong> Against a database that already has these tables every statement fails loudly (it will not touch your data). To upgrade an existing deployment later, use <span class="ic">npx wrangler d1 migrations apply pq-radar --remote -c wrangler.local.jsonc</span> instead.</div>
+  </section>
+
+  <!-- ===================== 6 ===================== -->
+  <section class="panel" data-title="Deploy" id="p-deploy" role="tabpanel">
+    <h2><span class="g">Deploy</span> the Worker and container</h2>
+    <p class="intro">Needs Workers Scripts &mdash; Edit and Containers &mdash; Edit, Docker Desktop running, and the Workers Paid plan.</p>
+    <div class="code"><div class="code-bar"><span class="label">powershell</span><button class="copy">copy</button></div><pre><code>docker info | Select-String "Server Version"   <span class="cmt"># must print a version, else start Docker Desktop</span>
+npx wrangler deploy -c wrangler.local.jsonc</code></pre></div>
+    <ul class="plain">
+      <li>The first deploy builds the probe image and pushes it to Cloudflare's registry &mdash; allow several minutes.</li>
+      <li>On success Wrangler prints the URL, usually <span class="ic">https://pq-radar.<span class="ph">your-subdomain</span>.workers.dev</span>, and the cron schedule. Note the URL.</li>
+      <li>Wrangler lists the bindings it sees. Check that <span class="ic">DB</span> and your account-ID vars are the ones you intended.</li>
+    </ul>
+    <div class="note"><strong>At this point the UI is reachable but unprotected and has no scan tokens yet.</strong> It will show an empty state. Do steps 7 and 8 straight away, and don't share the URL until Access is on.</div>
+    <div class="warn"><strong>No Docker available?</strong> <span class="ic">--containers-rollout=none</span> deploys the Worker alone. That is fine for config changes <i>after</i> the container already exists, but on a first deploy there is no probe, so scans cannot run.</div>
+  </section>
+
+  <!-- ===================== 7 ===================== -->
+  <section class="panel" data-title="Secrets" id="p-secrets" role="tabpanel">
+    <h2>Scan tokens <span class="g">as secrets</span></h2>
+    <p class="intro">Create one read-only scan token per scanned account (Zone &mdash; Read and DNS &mdash; Read, all zones; see Permissions), validate it, then store it as a Worker secret.</p>
+    <ol class="plain">
+      <li>Validate the token <i>before</i> storing it:
+        <div class="code"><div class="code-bar"><span class="label">powershell</span><button class="copy">copy</button></div><pre><code>$env:SCAN_TOKEN = "<span class="ph">SCAN-TOKEN</span>"
+curl.exe -s -H "Authorization: Bearer $env:SCAN_TOKEN" "https://api.cloudflare.com/client/v4/zones?per_page=5"</code></pre></div>
+        Expect <span class="ic">"success": true</span> and your zones. An auth error means the token lacks Zone Read, or is scoped to the wrong account.
+      </li>
+      <li>Store it. Wrangler prompts for the value &mdash; paste it there, not on the command line:
+        <div class="code"><div class="code-bar"><span class="label">powershell</span><button class="copy">copy</button></div><pre><code>npx wrangler secret put CF_API_TOKEN    -c wrangler.local.jsonc
+npx wrangler secret put CF_API_TOKEN_QA -c wrangler.local.jsonc   <span class="cmt"># only if you set CF_ACCOUNT_ID_QA</span></code></pre></div>
+      </li>
+      <li>Confirm the names (values are never shown):
+        <div class="code"><div class="code-bar"><span class="label">powershell</span><button class="copy">copy</button></div><pre><code>npx wrangler secret list -c wrangler.local.jsonc
+Remove-Item Env:SCAN_TOKEN</code></pre></div>
+      </li>
+    </ol>
+    <table>
+      <tr><th>Secret</th><th>When</th></tr>
+      <tr><td><span class="ic">CF_API_TOKEN</span></td><td><span class="pill req">required</span> token for the account in <span class="ic">CF_ACCOUNT_ID</span></td></tr>
+      <tr><td><span class="ic">CF_API_TOKEN_QA</span></td><td>only if <span class="ic">CF_ACCOUNT_ID_QA</span> is set</td></tr>
+      <tr><td><span class="ic">CF_API_TOKEN_&lt;LABEL&gt;</span></td><td>one per entry when using <span class="ic">CF_ACCOUNTS</span></td></tr>
+      <tr><td><span class="ic">TRIGGER_SECRET</span></td><td><span class="pill opt">optional</span> not needed with Access. Set it only if scripts must call the API with a Bearer token.</td></tr>
+    </table>
+    <div class="crit"><strong>Never store tokens in a file in the repo folder.</strong> A scratch file with real tokens is the most common way credentials end up committed. Use a password manager.</div>
+  </section>
+
+  <!-- ===================== 8 ===================== -->
+  <section class="panel" data-title="Cloudflare Access" id="p-access" role="tabpanel">
+    <h2>Protect it with <span class="g">Cloudflare Access</span></h2>
+    <p class="intro">This app's data is a map of every origin IP behind your CDN. Put Access in front of it: per-user sign-in, no shared password. The Worker verifies Access's signed token itself (signature, issuer, audience, expiry), so it stays safe even if its <span class="ic">workers.dev</span> URL is reached without going through Access. Needs a role that can edit Access applications and policies.</p>
+
+    <h3>1. Create the application</h3>
+    <ol class="plain">
+      <li>Zero Trust &rarr; <b>Access controls &rarr; Applications &rarr; Add an application</b>.</li>
+      <li>Choose <b>Self-hosted and private &rarr; Workers</b> for a <span class="ic">workers.dev</span> URL (for a custom domain, use the Public DNS / hostname option instead). Continue.</li>
+      <li>Name it <span class="ic">pq-radar</span>. Under Destinations, set <b>Scope</b> to your <span class="ic">pq-radar</span> Worker and <b>Type</b> to <i>A Worker's production and preview URLs</i>.</li>
+      <li><b>Policy:</b> action <b>Allow</b>; Include &rarr; <b>Emails</b> selector listing named people (not &ldquo;Emails ending in&rdquo;), or an <b>Access Group</b> for easy on/offboarding. Leave MFA/justification options off unless required.</li>
+      <li><b>Login methods:</b> your company identity provider, or one-time PIN. Save the application.</li>
+    </ol>
+
+    <h3>2. Collect the two values</h3>
+    <div class="tw"><table>
+      <tr><th>Value</th><th>Where</th><th>Looks like</th></tr>
+      <tr><td><span class="ic">ACCESS_TEAM_DOMAIN</span></td><td>Zero Trust &rarr; Settings &rarr; Custom pages &rarr; <i>Team domain</i></td><td><span class="ph">your-team</span>.cloudflareaccess.com (bare hostname, no https://)</td></tr>
+      <tr><td><span class="ic">ACCESS_AUD</span></td><td>Open the application &rarr; <b>Additional settings</b> tab &rarr; <i>Application Audience (AUD) Tag</i> (copy icon)</td><td>64 hex characters</td></tr>
+    </table></div>
+    <div class="note"><strong>Both must come from the same account.</strong> The team domain and the application belong to one Cloudflare account; the Worker must be in the account whose Zero Trust holds that application. A mismatch makes every call return 401. The AUD is per application: a second Access app (for example for a custom domain) has a different AUD.</div>
+
+    <h3>3. Add them to the local config and redeploy</h3>
+    <div class="code"><div class="code-bar"><span class="label">wrangler.local.jsonc &mdash; inside "vars"</span><button class="copy">copy</button></div><pre><code>"ACCESS_TEAM_DOMAIN": "<span class="ph">your-team.cloudflareaccess.com</span>",
+"ACCESS_AUD": "<span class="ph">64-character-aud-tag</span>"</code></pre></div>
+    <div class="code"><div class="code-bar"><span class="label">powershell</span><button class="copy">copy</button></div><pre><code>npx wrangler deploy -c wrangler.local.jsonc --containers-rollout=none</code></pre></div>
+    <p class="body-txt"><span class="ic">--containers-rollout=none</span> is safe here: only vars changed, so the container image does not need rebuilding (and Docker isn't required for this redeploy).</p>
+
+    <h3>4. Verify</h3>
+    <ul class="plain">
+      <li>Open the URL in a <b>fresh incognito window</b>: you must hit the Access sign-in first, then land on the data with <b>no secret prompt</b>.</li>
+      <li>From PowerShell: <span class="ic">curl.exe -s -o NUL -w "%{http_code}" https://pq-radar.<span class="ph">your-subdomain</span>.workers.dev/api/readiness</span> should return <b>302</b> (redirect to the Access login), never 200.</li>
+      <li><span class="ic">npx wrangler secret list -c wrangler.local.jsonc</span> should <b>not</b> contain <span class="ic">TRIGGER_SECRET</span>, unless you chose to keep it for scripts.</li>
+    </ul>
+    <div class="warn"><strong>Skipping Access?</strong> Then set the shared secret instead (<span class="ic">npx wrangler secret put TRIGGER_SECRET -c wrangler.local.jsonc</span>) and the UI will ask for it. That is a single shared password with no per-user identity or audit trail &mdash; acceptable solo, thin for a shared deployment.</div>
+    <p class="body-txt">One-time-PIN-only sign-in proves mailbox control, not current employment; prefer your company identity provider where you can. Scheduled cron scans don't go through HTTP, so Access does not affect them.</p>
+  </section>
+
+  <!-- ===================== 9 ===================== -->
+  <section class="panel" data-title="First run" id="p-run" role="tabpanel">
+    <h2>First run <span class="g">&amp; verify</span></h2>
+    <ol class="plain">
+      <li>Open <span class="ic">https://pq-radar.<span class="ph">your-subdomain</span>.workers.dev/readiness</span> and sign in through Access.</li>
+      <li>Click <b>Pull zones from Cloudflare</b>. This reads zones and DNS records through your scan token(s). If it returns zero zones, see Troubleshooting.</li>
+      <li>Click <b>Run full scan</b>. The probe container starts (first start takes a moment) and works through the edge, origin, SSH and FTPS legs.</li>
+      <li>Watch results fill in on <span class="ic">/readiness</span>. A row's detail view shows the exact <span class="ic">openssl s_client</span> exchange behind each verdict, and for origin IPs with no DNS record the TLS certificate names appear (lock icon), which helps match an IP to its app.</li>
+    </ol>
+
+    <h3>Optional: sweep your own network ranges by CIDR</h3>
+    <p class="body-txt">Origins outside any configured range are still scanned as extras. Add a range only if you want address-by-address sweeps:</p>
+    <div class="code"><div class="code-bar"><span class="label">powershell</span><button class="copy">copy</button></div><pre><code>npx wrangler d1 execute pq-radar --remote -c wrangler.local.jsonc `
+  --command "INSERT INTO subnets (cidr, label, enabled) VALUES ('<span class="ph">YOUR.CIDR.HERE/24</span>', '<span class="ph">label</span>', 1)"</code></pre></div>
+
+    <h3>Optional: custom domain</h3>
+    <p class="body-txt">Dashboard &rarr; the Worker &rarr; Settings &rarr; Domains &amp; Routes, or a <span class="ic">routes</span> entry in the local config. Needs Workers Routes &mdash; Edit, the zone must be in the same account, and it adds a DNS record (get sign-off). If you do this, <b>the Access application must cover the new hostname</b>, and a hostname-based app has its own AUD tag: update <span class="ic">ACCESS_AUD</span> and redeploy.</p>
+
+    <h3>Before you commit anything</h3>
+    <div class="code"><div class="code-bar"><span class="label">powershell</span><button class="copy">copy</button></div><pre><code>git status                 <span class="cmt"># only intended files; wrangler.local.jsonc must not appear</span>
+git diff --cached          <span class="cmt"># read it: no account IDs, database ID, AUD, tokens, internal hostnames</span></code></pre></div>
+  </section>
+
+  <!-- ===================== 10 ===================== -->
+  <section class="panel" data-title="Troubleshooting" id="p-trouble" role="tabpanel">
+    <h2><span class="g">Troubleshooting</span></h2>
+    <div class="tw"><table>
+      <tr><th>Symptom</th><th>Likely cause &amp; fix</th></tr>
+      <tr><td><i>The Docker CLI is needed&hellip;</i> on deploy</td><td>Docker Desktop isn't running. Start it and retry; first-time deploys need it to build the image.</td></tr>
+      <tr><td><span class="ic">whoami</span> shows the wrong account</td><td>Stale <span class="ic">CLOUDFLARE_ACCOUNT_ID</span> or an old <span class="ic">wrangler login</span>. Re-export the variables, or set <span class="ic">account_id</span> in the local config.</td></tr>
+      <tr><td>Deploy fails on containers or D1 permission</td><td>Setup token is missing Containers &mdash; Edit or D1 &mdash; Edit, or the plan is the free Workers plan. Re-check the Permissions tab.</td></tr>
+      <tr><td>npm, wrangler or Docker cert errors</td><td>TLS-inspecting proxy. Set <span class="ic">NODE_EXTRA_CA_CERTS</span> to the corporate root CA and trust it in Docker.</td></tr>
+      <tr><td><span class="ic">d1 execute</span> errors on <span class="ic">schema.sql</span> (&ldquo;already exists&rdquo;)</td><td>Schema was already applied. Don't re-run; use <span class="ic">d1 migrations apply</span> for upgrades.</td></tr>
+      <tr><td>Everything returns 401 after enabling Access</td><td>Wrong <span class="ic">ACCESS_TEAM_DOMAIN</span> or <span class="ic">ACCESS_AUD</span>, or the application belongs to a different account/hostname. Open <span class="ic">https://<span class="ph">team</span>.cloudflareaccess.com/cdn-cgi/access/certs</span> &mdash; it should return JSON with a <span class="ic">keys</span> array &mdash; and re-copy the AUD from the right application.</td></tr>
+      <tr><td>Page shows the old secret prompt after signing in</td><td>Access session expired mid-use. Refresh the page. If it persists, one of the two Access vars is missing from the deployed Worker; redeploy.</td></tr>
+      <tr><td>Incognito loads the app with no Access login</td><td>The application's destination doesn't cover this URL. Edit the application's Workers destination and Save.</td></tr>
+      <tr><td><span class="ic">workers.dev</span> blocked on the corporate network</td><td>Use a custom domain (needs a DNS record on a zone in the same account, with sign-off).</td></tr>
+      <tr><td>Pull zones returns 0 zones</td><td>Scan token lacks Zone &mdash; Read, is scoped to the wrong account, or <span class="ic">CF_ACCOUNT_ID</span> still holds the placeholder. Re-run the validation curl in the Secrets tab.</td></tr>
+      <tr><td>A &ldquo;QA missing&rdquo; warning, or a bogus second account</td><td><span class="ic">CF_ACCOUNT_ID_QA</span> is still set to its placeholder. Delete the line if you scan only one account.</td></tr>
+      <tr><td>Origins never reach &ldquo;live&rdquo;</td><td>Origin firewall blocks Cloudflare egress, the address is private, or the origin isn't listening on the port. Dead IPs are reported as such, not hidden.</td></tr>
+      <tr><td>Some subdomains missing from the scan</td><td>Records are only read from zones the token can see. A subdomain delegated by NS to another DNS zone is not followed; that target zone must itself be visible to a scanned account.</td></tr>
+    </table></div>
+    <p class="foot">PQ Radar setup guide &middot; keep real IDs, tokens and internal hostnames out of the repository.</p>
+  </section>
+
+  <div class="pager">
+    <button class="btn" id="prev">&larr; Previous</button>
+    <button class="btn" id="next">Next &rarr;</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  var panels = Array.prototype.slice.call(document.querySelectorAll(".panel"));
+  var tabsEl = document.getElementById("tabs");
+  var prev = document.getElementById("prev");
+  var next = document.getElementById("next");
+  var tabs = [];
+  var current = 0;
+
+  panels.forEach(function (p, i) {
+    var b = document.createElement("button");
+    b.className = "tab";
+    b.setAttribute("role", "tab");
+    b.setAttribute("aria-controls", p.id);
+    b.innerHTML = '<span class="n">' + String(i).padStart(2, "0") + "</span>" + p.getAttribute("data-title");
+    b.addEventListener("click", function () { show(i, true); });
+    b.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowRight") { show(Math.min(i + 1, panels.length - 1), true); tabs[current].focus(); }
+      if (e.key === "ArrowLeft") { show(Math.max(i - 1, 0), true); tabs[current].focus(); }
+    });
+    tabsEl.appendChild(b);
+    tabs.push(b);
+  });
+
+  function show(i, updateHash) {
+    current = i;
+    panels.forEach(function (p, j) { p.classList.toggle("active", j === i); });
+    tabs.forEach(function (t, j) {
+      t.setAttribute("aria-selected", j === i ? "true" : "false");
+      t.tabIndex = j === i ? 0 : -1;
+    });
+    prev.disabled = i === 0;
+    next.disabled = i === panels.length - 1;
+    tabs[i].scrollIntoView({ block: "nearest", inline: "center" });
+    if (updateHash) {
+      try { history.replaceState(null, "", "#" + panels[i].id.replace(/^p-/, "")); } catch (e) {}
+      window.scrollTo(0, 0);
+    }
+  }
+
+  prev.addEventListener("click", function () { show(current - 1, true); });
+  next.addEventListener("click", function () { show(current + 1, true); });
+
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest ? e.target.closest(".copy") : null;
+    if (!btn) return;
+    var pre = btn.closest(".code").querySelector("pre");
+    var text = pre.innerText;
+    var done = function () { btn.textContent = "copied"; setTimeout(function () { btn.textContent = "copy"; }, 1400); };
+    try {
+      navigator.clipboard.writeText(text).then(done, function () { btn.textContent = "select + ctrl-c"; });
+    } catch (err) { btn.textContent = "select + ctrl-c"; }
+  });
+
+  var start = 0;
+  var h = (location.hash || "").replace("#", "");
+  if (h) {
+    panels.forEach(function (p, i) { if (p.id === "p-" + h) start = i; });
+  }
+  show(start, false);
+})();
+</script>
+</body>
+</html>
