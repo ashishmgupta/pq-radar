@@ -641,7 +641,7 @@ export const READINESS_DETAIL_PAGE_HTML = `<!doctype html>
     el.innerHTML = matched.map(function (r) {
       return '<tr>' +
         '<td>' + escapeHtml(r.ip) + '</td>' +
-        '<td class="muted">' + (r.hostnames ? escapeHtml(r.hostnames) : '<span class="muted">\\u2014</span>') + '</td>' +
+        '<td class="muted">' + (r.hostnames ? escapeHtml(r.hostnames) : (r.cert_names ? '<span title="From the TLS certificate (no DNS record points at this IP)">\\uD83D\\uDD12 ' + escapeHtml(r.cert_names) + '</span>' : '<span class="muted">\\u2014</span>')) + '</td>' +
         '<td>' + outcomeBadge(r.outcome) + '</td>' +
         '<td>' + (r.protocol ? escapeHtml(r.protocol) : '<span class="muted">\\u2014</span>') + '</td>' +
         '<td>' + (r.negotiated_group ? escapeHtml(r.negotiated_group) : '<span class="muted">\\u2014</span>') + '</td>' +

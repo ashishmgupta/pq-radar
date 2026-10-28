@@ -514,7 +514,7 @@ export function renderExportHtml(data: ExportData): string {
         ? rows.map(function (r) {
             return '<tr>' +
               '<td>' + escapeHtml(r.ip) + '</td>' +
-              '<td class="muted">' + (r.hostnames ? escapeHtml(r.hostnames) : '\\u2014') + '</td>' +
+              '<td class="muted">' + (r.hostnames ? escapeHtml(r.hostnames) : (r.cert_names ? '<span title="From the TLS certificate (no DNS record points at this IP)">\\uD83D\\uDD12 ' + escapeHtml(r.cert_names) + '</span>' : '\\u2014')) + '</td>' +
               '<td>' + outcomeBadge(r.outcome) + '</td>' +
               '<td class="muted">' + (r.protocol ? escapeHtml(r.protocol) : '\\u2014') + '</td>' +
               '<td class="muted">' + (r.negotiated_group ? escapeHtml(r.negotiated_group) : '\\u2014') + '</td>' +

@@ -343,6 +343,9 @@ async function buildReadinessData(env: Env) {
       outcome: r.outcome,
       protocol: r.protocol,
       negotiated_group: r.negotiated_group,
+      // CN + SANs from the cert the origin presented — identifies the app behind
+      // an IP that has no DNS record pointing at it.
+      cert_names: r.hostnames,
     }))
     .sort((a, b) => (a.ip < b.ip ? -1 : a.ip > b.ip ? 1 : 0));
 
