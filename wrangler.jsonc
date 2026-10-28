@@ -8,6 +8,9 @@
   "vars": {
     "CF_ACCOUNT_ID": "REPLACE_WITH_YOUR_DEV_CLOUDFLARE_ACCOUNT_ID",
     "CF_ACCOUNT_ID_QA": "REPLACE_WITH_YOUR_QA_CLOUDFLARE_ACCOUNT_ID"
+    // Optional — Cloudflare Access instead of TRIGGER_SECRET (see README.md):
+    // "ACCESS_TEAM_DOMAIN": "<team-name>.cloudflareaccess.com",
+    // "ACCESS_AUD": "<application-aud-tag>"
   },
   // NOTE: CF_ACCOUNT_ID / CF_ACCOUNT_ID_QA (in vars) are the *target* accounts
   // whose zones/DNS records this app reads via the Cloudflare API — not the

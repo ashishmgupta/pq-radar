@@ -7,6 +7,7 @@ import { READINESS_SERVICES_PAGE_HTML } from "./readiness-services-page";
 import { renderExportHtml } from "./export-page";
 import { Env, ProbeContainer, cfAccounts } from "./env";
 import { handleScheduled } from "./cron";
+import { accessEnabled, verifyAccessJwt, withAuthMeta } from "./access";
 import { listZones, listDnsRecords } from "./cloudflare";
 import {
   ScanConfigRow,
@@ -105,13 +106,15 @@ async function timingSafeEqualStr(a: string, b: string): Promise<boolean> {
 }
 
 async function checkAuth(request: Request, env: Env): Promise<Response | null> {
-  const authHeader = request.headers.get("Authorization") ?? "";
-  const expected = `Bearer ${env.TRIGGER_SECRET}`;
-  const ok = await timingSafeEqualStr(authHeader, expected);
-  if (!ok) {
-    return new Response("unauthorized", { status: 401 });
+  if (accessEnabled(env) && (await verifyAccessJwt(request, env))) return null;
+
+  // Bearer secret: the only mode when Access isn't configured, and an optional
+  // extra for scripts when it is. Fails closed if no secret is set at all.
+  if (env.TRIGGER_SECRET) {
+    const authHeader = request.headers.get("Authorization") ?? "";
+    if (await timingSafeEqualStr(authHeader, `Bearer ${env.TRIGGER_SECRET}`)) return null;
   }
-  return null;
+  return new Response("unauthorized", { status: 401 });
 }
 
 function ipToInt(ip: string): number | null {
@@ -340,12 +343,12 @@ async function buildReadinessData(env: Env) {
     .map((r) => ({
       ip: r.ip,
       hostnames: originIpToHostnames.get(r.ip)?.join(", ") ?? null,
-      outcome: r.outcome,
-      protocol: r.protocol,
-      negotiated_group: r.negotiated_group,
       // CN + SANs from the cert the origin presented — identifies the app behind
       // an IP that has no DNS record pointing at it.
       cert_names: r.hostnames,
+      outcome: r.outcome,
+      protocol: r.protocol,
+      negotiated_group: r.negotiated_group,
     }))
     .sort((a, b) => (a.ip < b.ip ? -1 : a.ip > b.ip ? 1 : 0));
 
@@ -438,7 +441,7 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === "/" && request.method === "GET") {
-      return new Response(DASHBOARD_HTML, {
+      return new Response(withAuthMeta(DASHBOARD_HTML, env), {
         headers: {
           "Content-Type": "text/html; charset=utf-8",
           "Cache-Control": "no-store",
@@ -447,7 +450,7 @@ export default {
     }
 
     if (url.pathname === "/schedule" && request.method === "GET") {
-      return new Response(SCHEDULE_PAGE_HTML, {
+      return new Response(withAuthMeta(SCHEDULE_PAGE_HTML, env), {
         headers: {
           "Content-Type": "text/html; charset=utf-8",
           "Cache-Control": "no-store",
@@ -456,7 +459,7 @@ export default {
     }
 
     if (url.pathname === "/readiness" && request.method === "GET") {
-      return new Response(READINESS_PAGE_HTML, {
+      return new Response(withAuthMeta(READINESS_PAGE_HTML, env), {
         headers: {
           "Content-Type": "text/html; charset=utf-8",
           "Cache-Control": "no-store",
@@ -465,7 +468,7 @@ export default {
     }
 
     if (url.pathname === "/readiness/detail" && request.method === "GET") {
-      return new Response(READINESS_DETAIL_PAGE_HTML, {
+      return new Response(withAuthMeta(READINESS_DETAIL_PAGE_HTML, env), {
         headers: {
           "Content-Type": "text/html; charset=utf-8",
           "Cache-Control": "no-store",
@@ -474,7 +477,7 @@ export default {
     }
 
     if (url.pathname === "/readiness/services" && request.method === "GET") {
-      return new Response(READINESS_SERVICES_PAGE_HTML, {
+      return new Response(withAuthMeta(READINESS_SERVICES_PAGE_HTML, env), {
         headers: {
           "Content-Type": "text/html; charset=utf-8",
           "Cache-Control": "no-store",

@@ -497,12 +497,15 @@ export const DASHBOARD_HTML = `<!doctype html>
   var gateError = document.getElementById("gate-error");
   var secretInput = document.getElementById("secret-input");
 
+  // Behind Cloudflare Access the server adds this marker and the browser's Access
+  // cookie authenticates API calls, so there is no secret to prompt for.
+  var accessMode = !!document.querySelector('meta[name="pq-auth"][content="access"]');
   function getSecret() { return sessionStorage.getItem(STORAGE_KEY); }
   function setSecret(v) { sessionStorage.setItem(STORAGE_KEY, v); }
   function clearSecret() { sessionStorage.removeItem(STORAGE_KEY); }
 
   function authHeaders() {
-    return { Authorization: "Bearer " + getSecret() };
+    return accessMode ? {} : { Authorization: "Bearer " + getSecret() };
   }
 
   function escapeHtml(s) {
@@ -795,7 +798,7 @@ export const DASHBOARD_HTML = `<!doctype html>
     if (e.key === "Enter") document.getElementById("gate-submit").click();
   });
 
-  if (getSecret()) {
+  if (accessMode || getSecret()) {
     showApp();
   } else {
     showGate();

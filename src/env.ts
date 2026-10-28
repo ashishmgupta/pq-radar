@@ -8,7 +8,9 @@ export class ProbeContainer extends Container {
 export interface Env {
   DB: D1Database;
   PROBE_CONTAINER: DurableObjectNamespace<ProbeContainer>;
-  TRIGGER_SECRET: string;
+  // Required unless Cloudflare Access is configured (ACCESS_* below); when it is,
+  // TRIGGER_SECRET is optional and only enables Bearer access for scripts.
+  TRIGGER_SECRET?: string;
   CF_API_TOKEN: string;
   CF_ACCOUNT_ID: string;
   CF_API_TOKEN_QA: string;
@@ -21,6 +23,10 @@ export interface Env {
   // when set; those two remain the fallback for existing deployments that
   // haven't set CF_ACCOUNTS. See README.md.
   CF_ACCOUNTS?: string;
+  // Optional: Cloudflare Access. Set both (plain vars) to authenticate via an Access
+  // JWT instead of TRIGGER_SECRET. See README.md.
+  ACCESS_TEAM_DOMAIN?: string;
+  ACCESS_AUD?: string;
 }
 
 export interface CfAccountConfig {

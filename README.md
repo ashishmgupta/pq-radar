@@ -122,13 +122,21 @@ configure your own following the steps below.
    loudly against a database that already has these tables, rather than
    touching your existing data).
 
-5. **Set `TRIGGER_SECRET`** — a secret you make up, gates every API endpoint
-   and the web UI's login screen (Bearer token / paste-once-per-session).
-   Never goes in `wrangler.jsonc`; secrets are encrypted, not committed
-   anywhere.
+5. **Choose how the UI/API is protected** — pick one:
+
+   **A. Shared secret** (simplest, fine solo). Make up a secret; it gates every
+   API endpoint and the web UI's login screen (Bearer token / paste-once-per-session).
+   Never goes in `wrangler.jsonc`; secrets are encrypted, not committed anywhere.
    ```
    npx wrangler secret put TRIGGER_SECRET
    ```
+
+   **B. Cloudflare Access** (recommended for shared/company use) — no shared
+   secret, no login screen; per-user identity. Do this *after* the first deploy
+   (step 7) once you have the Access application's values, following
+   [Authentication for shared/company deployments](#authentication-for-sharedcompany-deployments).
+   You'll set two plain vars, `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD`, and skip
+   `TRIGGER_SECRET` entirely.
 
 6. **Configure the account(s) to scan.** Two ways — pick one:
 
@@ -178,7 +186,7 @@ configure your own following the steps below.
    ```
 
 9. **First run**: visit `/readiness` on your deployed Worker, unlock with the
-   `TRIGGER_SECRET` you set in step 5, click **"Pull zones from Cloudflare"**
+   `TRIGGER_SECRET` you set in step 5 (or just sign in through Access), click **"Pull zones from Cloudflare"**
    to sync your DNS records, then **"Run full scan"**.
 
 ## Custom domain (optional)
@@ -206,30 +214,47 @@ trail, and this app's data is a map of every origin IP behind your CDN,
 which is genuinely sensitive reconnaissance information.
 
 **Recommended for a shared deployment: Cloudflare Access, restricted to
-named individuals**, in front of the Worker's web UI — zero auth code on
-your side.
+named individuals.** The Worker supports it natively and it's opt-in by
+configuration only — the same code runs either way.
 
-- No identity-provider integration required: use a **one-time PIN** policy.
-  A visitor enters their work email, Cloudflare emails a six-digit code,
-  they're in.
-- Restrict to **specific email addresses**, not the whole domain — in the
-  policy, use the **Emails** selector (not "Emails ending in") and list
-  people by address. Anyone else is refused, even a valid company address.
-  An **Access Group** (a named, reusable list) makes onboarding/offboarding
-  a single edit instead of hunting through every policy.
-- Free tier covers up to 50 users. If you later add a real IDP, swap the
-  policy from one-time PIN to it without touching any code here.
-- Leave `TRIGGER_SECRET` in place on the API endpoints the cron and any
-  scripts call — Access sits only in front of the human-facing UI, and the
-  two coexist cleanly.
+**How it works.** Access sits in front of the Worker and signs every request
+with a JWT (`Cf-Access-Jwt-Assertion`). When `ACCESS_TEAM_DOMAIN` and
+`ACCESS_AUD` are set, the Worker verifies that JWT itself (signature, issuer,
+audience, expiry) on every API call and the pages skip the secret prompt. It
+verifies rather than trusting the header, so the Worker stays protected even
+if its `workers.dev` URL is reachable without going through Access.
 
-Skip building a username/password login of your own — that means storing
-and hashing credentials and managing sessions, which is more work than the
-shared secret it would replace, and still no real per-user identity. One
-honest limit of PIN-only worth knowing: it proves mailbox control, not
-active employment, so someone who's left the company but still has mailbox
-access could still get in — an acceptable tradeoff for an internal
-dashboard, but worth knowing rather than assuming.
+**Setup**
+1. Zero Trust dashboard → **Access controls → Applications → Add an
+   application**. For a `*.workers.dev` URL choose the **Workers** type (not
+   "Public DNS"); for a custom domain use **Self-hosted**.
+2. Policy: **Allow**, with the **Emails** selector listing people by address
+   (not "Emails ending in"), or an **Access Group** for easy on/offboarding.
+   Identity provider: your company IdP, or the built-in **one-time PIN**.
+3. Open the application and copy its **Application Audience (AUD) tag**. Your
+   **team domain** is `<team-name>.cloudflareaccess.com` (Zero Trust → Settings
+   → Custom Pages shows it).
+4. Add both as plain vars in your (gitignored) deploy config, then redeploy:
+   ```jsonc
+   "vars": {
+     "ACCESS_TEAM_DOMAIN": "<team-name>.cloudflareaccess.com",
+     "ACCESS_AUD": "<application-aud-tag>"
+   }
+   ```
+   Do **not** set `TRIGGER_SECRET` unless you also want scripts to call the API
+   with a Bearer token (it's accepted *in addition to* Access when set).
+5. Verify: an incognito window must hit the Access login first, and
+   `curl https://<your-worker>/api/...` without credentials must return 401.
+
+The scheduled (cron) scans don't go through HTTP, so Access doesn't affect
+them.
+
+- Free tier covers up to 50 users. Swapping the identity provider later
+  needs no code or config change here.
+- One honest limit of one-time-PIN-only: it proves mailbox control, not
+  active employment. Prefer your company IdP where you can.
+- Skip building a username/password login of your own — more work than the
+  shared secret it replaces, and still no real per-user identity.
 
 ## Local testing without a full deploy
 
